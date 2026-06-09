@@ -67,7 +67,6 @@ class WaveformPainter extends CustomPainter {
       for (int j = idx; j < min(idx + step, samples.length); j++) {
         peak = max(peak, samples[j].abs());
       }
-      final double y = centerY - (peak * centerY * 0.9);
       if (first) {
         path.moveTo(x.toDouble(), centerY);
         first = false;

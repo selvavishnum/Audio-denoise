@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -88,7 +87,7 @@ class AudioProvider extends ChangeNotifier {
 
       final bytes = await File(outPath).readAsBytes();
       final data = ProcessorService.decodeWav(bytes);
-      await File(outPath).delete().catchError((_) {});
+      await File(outPath).delete().catchError((dynamic _) => File(outPath));
       return data;
     } catch (e) {
       return null;
