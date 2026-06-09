@@ -75,33 +75,8 @@ class AudioProvider extends ChangeNotifier {
   }
 
   Future<AudioData?> _convertToWavAndDecode(String inputPath) async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final outPath = '${dir.path}/tmp_import_${_uuid.v4()}.wav';
-
-      // Use FFmpeg via ffmpeg_kit
-      // ignore: depend_on_referenced_packages
-      final session = await _runFFmpeg(
-          '-y -i "$inputPath" -ar 44100 -ac 1 "$outPath"');
-      if (!session) return null;
-
-      final bytes = await File(outPath).readAsBytes();
-      final data = ProcessorService.decodeWav(bytes);
-      await File(outPath).delete().catchError((dynamic _) => File(outPath));
-      return data;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Future<bool> _runFFmpeg(String command) async {
-    try {
-      // Dynamic import to avoid hard dependency
-      final result = await compute(_ffmpegExecute, command);
-      return result;
-    } catch (_) {
-      return false;
-    }
+    // Non-WAV decoding is not supported; WAV files are handled directly.
+    return null;
   }
 
   // ── Recording ────────────────────────────────────────────────────────
@@ -238,12 +213,3 @@ class AudioProvider extends ChangeNotifier {
   }
 }
 
-// Top-level for compute() isolation
-Future<bool> _ffmpegExecute(String command) async {
-  try {
-    final result = await Process.run('ffmpeg', command.split(' '));
-    return result.exitCode == 0;
-  } catch (_) {
-    return false;
-  }
-}

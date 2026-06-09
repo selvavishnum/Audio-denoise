@@ -27,7 +27,7 @@ class WaveformPainter extends CustomPainter {
     if (originalSamples != null && originalSamples!.isNotEmpty) {
       _drawWaveform(
         canvas, size, originalSamples!,
-        showProcessed ? AppColors.textDim.withOpacity(0.35) : AppColors.violet,
+        showProcessed ? AppColors.textDim.withValues(alpha: 0.35) : AppColors.violet,
       );
     }
 
