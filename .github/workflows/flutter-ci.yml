@@ -23,11 +23,10 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # ── Flutter ───────────────────────────────────────────────────────
+      # ── Flutter (latest stable — ships Dart ≥ 3.12) ──────────────────
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.x'
           channel: 'stable'
           cache: true
 
