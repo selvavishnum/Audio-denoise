@@ -1,0 +1,53 @@
+name: clearwave
+description: ClearWave Studio - Professional AI Audio Noise Cancellation
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Audio Recording
+  record: ^5.0.5
+
+  # Audio Playback
+  just_audio: ^0.9.38
+
+  # File Management
+  file_picker: ^8.0.3
+  path_provider: ^2.1.3
+
+  # FFmpeg Audio Processing
+  ffmpeg_kit_flutter_min_gpl: ^6.0.3
+
+  # State Management
+  provider: ^6.1.2
+
+  # Local Storage
+  shared_preferences: ^2.2.3
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # UI & Animations
+  flutter_animate: ^4.5.0
+  google_fonts: ^6.2.0
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Utils
+  uuid: ^4.4.0
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.9
+
+flutter:
+  uses-material-design: true
