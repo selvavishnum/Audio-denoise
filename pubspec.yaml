@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
 
   # Audio recording & playback
-  record: ^5.0.5
+  record: ^7.0.0
   just_audio: ^0.9.38
 
   # File import & sharing
