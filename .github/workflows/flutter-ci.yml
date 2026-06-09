@@ -1,0 +1,53 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Analyze & Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Java (required by Android Gradle) ─────────────────────────────
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # ── Flutter ───────────────────────────────────────────────────────
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.x'
+          channel: 'stable'
+          cache: true
+
+      # ── Dependencies ──────────────────────────────────────────────────
+      - name: Install dependencies
+        run: flutter pub get
+
+      # ── Static analysis ───────────────────────────────────────────────
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      # ── Build debug APK ───────────────────────────────────────────────
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      # ── Upload APK as artifact ────────────────────────────────────────
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: noiseclear-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: warn
+          retention-days: 14
