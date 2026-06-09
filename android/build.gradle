@@ -20,14 +20,6 @@ allprojects {
 rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
-    // Provide flutter SDK properties for plugins (e.g. record_android 1.5.x)
-    // that reference flutter.compileSdkVersion before FlutterExtension is applied.
-    project.ext.flutter = [
-        compileSdkVersion: 34,
-        minSdkVersion    : 24,
-        targetSdkVersion : 34,
-        ndkVersion       : '25.1.8937393',
-    ]
 }
 subprojects {
     project.evaluationDependsOn(':app')
