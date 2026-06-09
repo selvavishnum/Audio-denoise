@@ -57,7 +57,7 @@ class AppTheme {
         titleTextStyle: GoogleFonts.inter(
           color: AppColors.textPrim, fontSize: 18, fontWeight: FontWeight.w700),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.card,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -69,11 +69,11 @@ class AppTheme {
         activeTrackColor: AppColors.violet,
         inactiveTrackColor: AppColors.border,
         thumbColor: AppColors.violet,
-        overlayColor: AppColors.violet.withOpacity(0.15),
+        overlayColor: AppColors.violet.withValues(alpha: 0.15),
         trackHeight: 3,
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
       ),
-      tabBarTheme: const TabBarTheme(
+      tabBarTheme: const TabBarThemeData(
         labelColor: AppColors.violet,
         unselectedLabelColor: AppColors.textDim,
         indicatorColor: AppColors.violet,

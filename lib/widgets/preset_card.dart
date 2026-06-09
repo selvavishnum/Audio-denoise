@@ -56,7 +56,7 @@ class PresetCard extends StatelessWidget {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: m.colors.first.withOpacity(0.45),
+                    color: m.colors.first.withValues(alpha:0.45),
                     blurRadius: 18,
                     spreadRadius: 2,
                   )
@@ -91,7 +91,7 @@ class PresetCard extends StatelessWidget {
                 m.subtitle,
                 style: GoogleFonts.inter(
                   color: isSelected
-                      ? Colors.white.withOpacity(0.8)
+                      ? Colors.white.withValues(alpha:0.8)
                       : AppColors.textDim,
                   fontSize: 11,
                 ),
@@ -101,7 +101,7 @@ class PresetCard extends StatelessWidget {
                 'Pitch ${p.pitchSemitones >= 0 ? '+' : ''}${p.pitchSemitones.toStringAsFixed(1)}st',
                 style: GoogleFonts.inter(
                   color: isSelected
-                      ? Colors.white.withOpacity(0.75)
+                      ? Colors.white.withValues(alpha:0.75)
                       : AppColors.textDim,
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
@@ -111,7 +111,7 @@ class PresetCard extends StatelessWidget {
                 'Formant ×${p.formantFactor.toStringAsFixed(2)}',
                 style: GoogleFonts.inter(
                   color: isSelected
-                      ? Colors.white.withOpacity(0.75)
+                      ? Colors.white.withValues(alpha:0.75)
                       : AppColors.textDim,
                   fontSize: 10,
                   fontWeight: FontWeight.w500,

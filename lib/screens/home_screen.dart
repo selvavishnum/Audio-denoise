@@ -84,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _share(AudioProvider prov) async {
     final path = prov.shareFilePath;
     if (path == null) return;
-    await Share.shareXFiles([XFile(path)], text: 'NoiseClear processed audio');
+    await SharePlus.instance.share(ShareParams(files: [XFile(path)], text: 'NoiseClear processed audio'));
   }
 
   @override
@@ -162,9 +162,9 @@ class _HomeScreenState extends State<HomeScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withOpacity(0.15),
+                color: const Color(0xFFEF4444).withValues(alpha:0.15),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.5)),
+                border: Border.all(color: const Color(0xFFEF4444).withValues(alpha:0.5)),
               ),
               child: Row(
                 children: [
@@ -218,11 +218,11 @@ class _HomeScreenState extends State<HomeScreen>
                   padding: const EdgeInsets.symmetric(vertical: 7),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? AppColors.violet.withOpacity(0.18)
+                        ? AppColors.violet.withValues(alpha:0.18)
                         : AppColors.surface,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: isActive ? AppColors.violet.withOpacity(0.6) : AppColors.border,
+                      color: isActive ? AppColors.violet.withValues(alpha:0.6) : AppColors.border,
                     ),
                   ),
                   child: Column(
@@ -344,11 +344,11 @@ class _HomeScreenState extends State<HomeScreen>
                                 horizontal: 7, vertical: 3),
                             decoration: BoxDecoration(
                               color: (_showProcessed ? AppColors.green : AppColors.violet)
-                                  .withOpacity(0.15),
+                                  .withValues(alpha:0.15),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
                                 color: (_showProcessed ? AppColors.green : AppColors.violet)
-                                    .withOpacity(0.4),
+                                    .withValues(alpha:0.4),
                               ),
                             ),
                             child: Text(
@@ -608,7 +608,7 @@ class _HomeScreenState extends State<HomeScreen>
               boxShadow: canProcess
                   ? [
                       BoxShadow(
-                        color: AppColors.violet.withOpacity(0.35),
+                        color: AppColors.violet.withValues(alpha:0.35),
                         blurRadius: 20,
                         offset: const Offset(0, 4),
                       )
@@ -678,9 +678,9 @@ class _ActionButton extends StatelessWidget {
         child: Container(
           height: 40,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha:0.12),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withOpacity(0.4)),
+            border: Border.all(color: color.withValues(alpha:0.4)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -726,10 +726,10 @@ class _PlayButton extends StatelessWidget {
         child: Container(
           height: 34,
           decoration: BoxDecoration(
-            color: isPlaying ? color.withOpacity(0.18) : AppColors.surface,
+            color: isPlaying ? color.withValues(alpha:0.18) : AppColors.surface,
             borderRadius: BorderRadius.circular(9),
             border: Border.all(
-              color: isPlaying ? color.withOpacity(0.6) : AppColors.border,
+              color: isPlaying ? color.withValues(alpha:0.6) : AppColors.border,
             ),
           ),
           child: Row(

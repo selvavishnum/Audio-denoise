@@ -55,9 +55,9 @@ class ParamSlider extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: activeColor.withOpacity(0.12),
+                  color: activeColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: activeColor.withOpacity(0.35)),
+                  border: Border.all(color: activeColor.withValues(alpha: 0.35)),
                 ),
                 child: Text(
                   _displayValue,
@@ -76,7 +76,7 @@ class ParamSlider extends StatelessWidget {
               activeTrackColor: activeColor,
               inactiveTrackColor: AppColors.border,
               thumbColor: activeColor,
-              overlayColor: activeColor.withOpacity(0.15),
+              overlayColor: activeColor.withValues(alpha: 0.15),
               trackHeight: 3,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
             ),
