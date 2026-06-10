@@ -1,5 +1,5 @@
--keep class com.arthenica.ffmpegkit.** { *; }
--keep class com.arthenica.smartexception.** { *; }
+# Flutter Play Core — app doesn't use deferred components; suppress R8 missing class errors
+-dontwarn com.google.android.play.core.**
 
 # Flutter
 -keep class io.flutter.** { *; }
