@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Noise-cancel waveform mark in white -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,24 C38.536,24 26,36.536 26,52 C26,67.464 38.536,80 54,80
+                         C69.464,80 82,67.464 82,52 C82,36.536 69.464,24 54,24 Z
+                         M54,72 C42.954,72 34,63.046 34,52 C34,40.954 42.954,32 54,32
+                         C65.046,32 74,40.954 74,52 C74,63.046 65.046,72 54,72 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,52 L46,40 L52,60 L58,44 L64,52"/>
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:pathData="M40,52 L46,40 L52,60 L58,44 L64,52"
+        android:fillColor="@android:color/transparent"/>
+</vector>

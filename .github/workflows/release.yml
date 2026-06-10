@@ -1,0 +1,139 @@
+name: Release APK
+
+# Trigger 1 — manual dispatch from the Actions tab (choose version)
+# Trigger 2 — pushing a tag like  v1.2.3
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name  (e.g. 1.2.0)'
+        required: true
+        default: '1.0.0'
+      version_code:
+        description: 'Version code  (integer, must be higher than last Play Store upload)'
+        required: true
+        default: '1'
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    name: Build & Publish Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Java ──────────────────────────────────────────────────────────
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # ── Flutter ───────────────────────────────────────────────────────
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      # ── Dependencies ──────────────────────────────────────────────────
+      - name: Install dependencies
+        run: flutter pub get
+
+      # ── Resolve version ───────────────────────────────────────────────
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            NAME="${GITHUB_REF#refs/tags/v}"
+            CODE=$(git rev-list --count HEAD)
+          else
+            NAME="${{ github.event.inputs.version_name }}"
+            CODE="${{ github.event.inputs.version_code }}"
+          fi
+          echo "name=$NAME"  >> "$GITHUB_OUTPUT"
+          echo "code=$CODE"  >> "$GITHUB_OUTPUT"
+          echo "tag=v$NAME"  >> "$GITHUB_OUTPUT"
+
+      # ── Production signing (optional) ─────────────────────────────────
+      # Store these four secrets in  Settings → Secrets → Actions:
+      #   KEYSTORE_BASE64  — base64 of your .jks file
+      #                       $ base64 -w0 upload-keystore.jks
+      #   STORE_PASSWORD   — keystore password
+      #   KEY_ALIAS        — key alias inside the keystore
+      #   KEY_PASSWORD     — key password
+      #
+      # If secrets are absent the APK is signed with the debug key (fine
+      # for sideloading and internal testing, NOT for Play Store).
+      - name: Set up production signing
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD:  ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS:       ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD:    ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/keystore.jks
+          cat > android/key.properties <<EOF
+          storeFile=../keystore.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      # ── Build ─────────────────────────────────────────────────────────
+      - name: Build release APK
+        run: |
+          flutter build apk --release \
+            --build-name="${{ steps.ver.outputs.name }}" \
+            --build-number="${{ steps.ver.outputs.code }}"
+
+      # ── Rename APK ────────────────────────────────────────────────────
+      - name: Rename APK
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/NoiseClear-${{ steps.ver.outputs.name }}.apk
+
+      # ── Upload artifact (always available in Actions tab) ─────────────
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoiseClear-${{ steps.ver.outputs.name }}-apk
+          path: build/app/outputs/flutter-apk/NoiseClear-*.apk
+          retention-days: 90
+
+      # ── GitHub Release (only when triggered by a tag) ─────────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:   ${{ steps.ver.outputs.tag }}
+          name:       "NoiseClear ${{ steps.ver.outputs.tag }}"
+          body: |
+            ## NoiseClear ${{ steps.ver.outputs.tag }}
+
+            ### Install
+            1. Download **NoiseClear-${{ steps.ver.outputs.name }}.apk** below.
+            2. On your Android device: **Settings → Apps → Install unknown apps** → allow your browser/file manager.
+            3. Open the downloaded APK and tap **Install**.
+
+            Requires Android 7.0+ (minSdk 24).
+
+            ---
+            *Full changelog generated from commits since the last release.*
+          generate_release_notes: true
+          files: build/app/outputs/flutter-apk/NoiseClear-*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
