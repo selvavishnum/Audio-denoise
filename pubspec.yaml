@@ -33,9 +33,7 @@ dependencies:
   uuid: ^4.4.0
 
   # Multi-format audio import (MP3, M4A, FLAC, OGG → WAV)
-  # LTS variant uses com.arthenica:ffmpeg-kit-audio:6.0.LTS which is on Maven Central.
-  # The non-LTS 6.0.3 uses 6.0-2 which is only on GitHub Packages (requires auth).
-  ffmpeg_kit_flutter_audio: 6.0.3-LTS
+  ffmpeg_kit_flutter_audio: ^6.0.3
 
   # Persistence (preset save, usage counter)
   shared_preferences: ^2.3.5
