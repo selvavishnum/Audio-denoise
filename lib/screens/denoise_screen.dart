@@ -67,14 +67,46 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
     );
   }
 
-  Widget _header(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Denoise', style: Theme.of(context).textTheme.displayLarge),
-      const SizedBox(height: 4),
-      Text('Import audio and remove noise', style: Theme.of(context).textTheme.bodyMedium),
-    ],
-  );
+  Widget _header(BuildContext context) {
+    final prov = context.watch<AudioProvider>();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Denoise', style: Theme.of(context).textTheme.displayLarge),
+            const SizedBox(height: 4),
+            Text('Import audio and remove noise', style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        )),
+        if (!prov.hasReachedFreeLimit)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.border, width: 0.5),
+            ),
+            child: Text(
+              '${prov.freeExportsLeft} free left',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSec),
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.textPrim,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text('PRO',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.white, letterSpacing: 0.5),
+            ),
+          ),
+      ],
+    );
+  }
 
   Widget _importCta(BuildContext context, AudioProvider prov) {
     return GestureDetector(
@@ -303,8 +335,111 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   Future<void> _export(BuildContext context, AudioProvider prov) async {
     final path = prov.shareFilePath;
     if (path == null) return;
+
+    if (prov.hasReachedFreeLimit) {
+      await _showExportGate(context, prov, path);
+    } else {
+      await prov.recordExport();
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(path)], text: 'NoiseClear processed audio'),
+      );
+    }
+  }
+
+  Future<void> _showExportGate(BuildContext context, AudioProvider prov, String path) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _ExportGateSheet(
+        onWatchAd: () async {
+          Navigator.pop(context);
+          await _simulateAdAndExport(context, prov, path);
+        },
+        onUpgrade: () {
+          Navigator.pop(context);
+          _showUpgradeDialog(context);
+        },
+      ),
+    );
+  }
+
+  Future<void> _simulateAdAndExport(BuildContext context, AudioProvider prov, String path) async {
+    // Ad countdown simulation — replace with real ad SDK call in production
+    int countdown = 5;
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted && ctx.mounted) {
+              countdown--;
+              if (countdown <= 0) {
+                Navigator.pop(ctx);
+              } else {
+                setS(() {});
+              }
+            }
+          });
+          return AlertDialog(
+            backgroundColor: AppColors.bg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.play_circle_outline_rounded, size: 48, color: AppColors.textPrim),
+              const SizedBox(height: 12),
+              Text('Ad playing… $countdown',
+                  style: const TextStyle(fontSize: 14, color: AppColors.textSec)),
+            ]),
+          );
+        },
+      ),
+    );
+    await Future.delayed(const Duration(seconds: 5));
+    if (!mounted) return;
+    await prov.recordExport();
     await SharePlus.instance.share(
       ShareParams(files: [XFile(path)], text: 'NoiseClear processed audio'),
+    );
+  }
+
+  void _showUpgradeDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('NoiseClear Pro',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _ProBenefit(icon: Icons.all_inclusive_rounded, text: 'Unlimited exports'),
+          _ProBenefit(icon: Icons.block_rounded,         text: 'Zero ads'),
+          _ProBenefit(icon: Icons.tune_rounded,          text: 'All 6 presets + advanced controls'),
+          _ProBenefit(icon: Icons.music_note_rounded,    text: 'Music mixing'),
+          _ProBenefit(icon: Icons.batch_prediction_rounded, text: 'Batch processing (coming soon)'),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.textPrim,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Text('₹99 / month  —  Coming Soon',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.white)),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close', style: TextStyle(color: AppColors.textDim)),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -458,6 +593,103 @@ class _BigBtn extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Monetization gate bottom sheet ────────────────────────────────────────────
+
+class _ExportGateSheet extends StatelessWidget {
+  final VoidCallback onWatchAd;
+  final VoidCallback onUpgrade;
+  const _ExportGateSheet({required this.onWatchAd, required this.onUpgrade});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border, width: 0.5),
+              ),
+              child: const Icon(Icons.lock_open_rounded, size: 22, color: AppColors.textPrim),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('10 free exports used',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
+                SizedBox(height: 2),
+                Text('Watch a short ad or upgrade to continue',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSec)),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: onWatchAd,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.textPrim,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.play_circle_rounded, size: 18, color: AppColors.white),
+                SizedBox(width: 8),
+                Text('Watch Ad  —  Free Export',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.white)),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: onUpgrade,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border, width: 0.5),
+              ),
+              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.workspace_premium_rounded, size: 18, color: AppColors.textSec),
+                SizedBox(width: 8),
+                Text('Upgrade Pro  —  ₹99/month',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSec)),
+              ]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProBenefit extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _ProBenefit({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(children: [
+        Icon(icon, size: 16, color: AppColors.textPrim),
+        const SizedBox(width: 10),
+        Text(text, style: const TextStyle(fontSize: 13, color: AppColors.textSec)),
+      ]),
     );
   }
 }
