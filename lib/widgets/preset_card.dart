@@ -25,7 +25,7 @@ class PresetCard extends StatelessWidget {
         [Color(0xFF06B6D4), Color(0xFF22D3EE)]),
     VoicePreset.deep: _PresetMeta('🔊', 'DEEP', 'Rich Bass Voice',
         [Color(0xFF3B82F6), Color(0xFF60A5FA)]),
-    VoicePreset.natural: _PresetMeta('🍃', 'NATURAL', 'True to Life',
+    VoicePreset.natural: _PresetMeta('🎙️', 'CLEAN', 'Noise Only',
         [Color(0xFF22C55E), Color(0xFF4ADE80)]),
     VoicePreset.hype: _PresetMeta('⚡', 'HYPE', 'High Energy',
         [Color(0xFFF59E0B), Color(0xFFFBBF24)]),
@@ -81,7 +81,7 @@ class PresetCard extends StatelessWidget {
               Text(
                 m.name,
                 style: GoogleFonts.inter(
-                  color: Colors.white,
+                  color: isSelected ? Colors.white : AppColors.textPrim,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
@@ -90,9 +90,7 @@ class PresetCard extends StatelessWidget {
               Text(
                 m.subtitle,
                 style: GoogleFonts.inter(
-                  color: isSelected
-                      ? Colors.white.withValues(alpha:0.8)
-                      : AppColors.textDim,
+                  color: isSelected ? Colors.white.withValues(alpha: 0.8) : AppColors.textSec,
                   fontSize: 11,
                 ),
               ),
@@ -100,9 +98,7 @@ class PresetCard extends StatelessWidget {
               Text(
                 'Pitch ${p.pitchSemitones >= 0 ? '+' : ''}${p.pitchSemitones.toStringAsFixed(1)}st',
                 style: GoogleFonts.inter(
-                  color: isSelected
-                      ? Colors.white.withValues(alpha:0.75)
-                      : AppColors.textDim,
+                  color: isSelected ? Colors.white.withValues(alpha: 0.75) : AppColors.textDim,
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),
@@ -110,9 +106,7 @@ class PresetCard extends StatelessWidget {
               Text(
                 'Formant ×${p.formantFactor.toStringAsFixed(2)}',
                 style: GoogleFonts.inter(
-                  color: isSelected
-                      ? Colors.white.withValues(alpha:0.75)
-                      : AppColors.textDim,
+                  color: isSelected ? Colors.white.withValues(alpha: 0.75) : AppColors.textDim,
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),

@@ -18,21 +18,17 @@ class WaveformPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bg = Paint()..color = AppColors.surface;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(12)),
-      bg,
-    );
-
     if (originalSamples != null && originalSamples!.isNotEmpty) {
       _drawWaveform(
         canvas, size, originalSamples!,
-        showProcessed ? AppColors.textDim.withValues(alpha: 0.35) : AppColors.violet,
+        showProcessed
+            ? AppColors.textDim.withValues(alpha: 0.40)
+            : AppColors.textPrim.withValues(alpha: 0.70),
       );
     }
 
     if (showProcessed && processedSamples != null && processedSamples!.isNotEmpty) {
-      _drawWaveform(canvas, size, processedSamples!, AppColors.green);
+      _drawWaveform(canvas, size, processedSamples!, AppColors.textPrim);
     }
 
     // Idle flat line

@@ -42,13 +42,13 @@ class AudioParams {
   final VoicePreset preset;
 
   const AudioParams({
-    this.nrStrength = 85,
-    this.nrAlpha = 88,
-    this.nrFloor = 4,
-    this.gateThreshold = 70,
-    this.gateRatio = 2.0,
-    this.vadSensitivity = 4,
-    this.vadHoldMs = 80,
+    this.nrStrength = 60,
+    this.nrAlpha = 92,
+    this.nrFloor = 2.0,
+    this.gateThreshold = 30,
+    this.gateRatio = 1.2,
+    this.vadSensitivity = 2.5,
+    this.vadHoldMs = 200,
     this.pitchSemitones = 2,
     this.formantFactor = 1.12,
     this.exciterAmount = 55,
@@ -64,7 +64,7 @@ class AudioParams {
     this.deEssAmt = 40,
     this.targetLufs = -14,
     this.mode = ProcessingMode.denoise,
-    this.preset = VoicePreset.crispy,
+    this.preset = VoicePreset.natural,
   });
 
   static const Map<VoicePreset, AudioParams> presets = {
@@ -81,8 +81,8 @@ class AudioParams {
       preset: VoicePreset.pop,
     ),
     VoicePreset.radio: AudioParams(
-      pitchSemitones: -1, formantFactor: 0.92, exciterAmount: 40, smoothAmount: 65,
-      hpFreq: 100, bassGain: 3.0, deHarshGain: -3.0, presGain: 2.5, airGain: 1.5,
+      pitchSemitones: -1, formantFactor: 0.92, exciterAmount: 35, smoothAmount: 65,
+      hpFreq: 100, bassGain: 3.0, deHarshGain: -3.5, presGain: 1.5, airGain: -2.0,
       compThreshold: -20, compRatio: 4.0, deEssAmt: 35, targetLufs: -14,
       preset: VoicePreset.radio,
     ),
@@ -92,10 +92,16 @@ class AudioParams {
       compThreshold: -22, compRatio: 3.5, deEssAmt: 30, targetLufs: -14,
       preset: VoicePreset.deep,
     ),
+    // Natural = pure background noise removal. Zero voice alteration.
     VoicePreset.natural: AudioParams(
-      pitchSemitones: 1, formantFactor: 1.05, exciterAmount: 30, smoothAmount: 70,
-      hpFreq: 80, bassGain: 1.5, deHarshGain: -2.0, presGain: 2.5, airGain: 2.0,
-      compThreshold: -20, compRatio: 2.5, deEssAmt: 30, targetLufs: -14,
+      nrStrength: 72, nrAlpha: 94, nrFloor: 1.6,
+      gateThreshold: 15, gateRatio: 1.0,
+      vadSensitivity: 1.8, vadHoldMs: 300,
+      pitchSemitones: 0, formantFactor: 1.0,
+      exciterAmount: 0, smoothAmount: 0,
+      hpFreq: 60, bassGain: 0, deHarshGain: 0, presGain: 0, airGain: 0,
+      compThreshold: 0, compRatio: 1.0, deEssAmt: 0,
+      targetLufs: -14,
       preset: VoicePreset.natural,
     ),
     VoicePreset.hype: AudioParams(

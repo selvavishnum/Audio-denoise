@@ -51,41 +51,49 @@ class ProcessorService {
     void progress(double p) => sendPort.send(p);
 
     progress(0.02);
-    final noiseProfile = _buildNoiseProfile(s, rate);
+    final noiseProfile = _buildNoiseProfile(s, rate, params);
 
     progress(0.10);
     s = _wienerFilter(s, noiseProfile, params);
 
     progress(0.22);
-    s = _hardSpectralGate(s, noiseProfile, params);
+    s = _softSpectralGate(s, noiseProfile, params);
 
     progress(0.32);
     s = _vadGate(s, rate, params);
 
     progress(0.40);
-    if (params.pitchSemitones != 0) {
+    if (params.pitchSemitones.abs() > 0.05) {
       s = _pitchShift(s, params.pitchSemitones);
     }
 
     progress(0.52);
-    if (params.formantFactor != 1.0) {
+    if ((params.formantFactor - 1.0).abs() > 0.01) {
       s = _formantShift(s, params.formantFactor, rate);
     }
 
     progress(0.60);
-    s = _harmonicExciter(s, rate, params.exciterAmount);
+    if (params.exciterAmount > 0.5) {
+      s = _harmonicExciter(s, rate, params.exciterAmount);
+    }
 
     progress(0.67);
-    s = _spectralSmooth(s, params.smoothAmount);
+    if (params.smoothAmount > 0.5) {
+      s = _spectralSmooth(s, params.smoothAmount);
+    }
 
     progress(0.74);
     s = _applyEQ(s, rate, params);
 
     progress(0.82);
-    s = _softCompress(s, params);
+    if (params.compRatio > 1.01) {
+      s = _softCompress(s, params);
+    }
 
     progress(0.88);
-    s = _deEss(s, rate, params);
+    if (params.deEssAmt > 0.5) {
+      s = _deEss(s, rate, params);
+    }
 
     progress(0.95);
     s = _normalizeLufs(s, params.targetLufs);
@@ -184,7 +192,7 @@ class ProcessorService {
 
   // ─── Algorithm 1: Build Noise Profile ─────────────────────────────────
 
-  static Float64List _buildNoiseProfile(Float32List samples, int rate) {
+  static Float64List _buildNoiseProfile(Float32List samples, int rate, AudioParams params) {
     const int FRAME = 2048;
     const int HOP = 512;
     final hann = FFTService.hannWindow(FRAME);
@@ -231,7 +239,7 @@ class ProcessorService {
       }
     }
     for (int k = 0; k < profile.length; k++) {
-      profile[k] = (profile[k] / numNoise) * 4.0; // nrFloor-like scaling
+      profile[k] = (profile[k] / numNoise) * params.nrFloor;
     }
     return profile;
   }
@@ -292,9 +300,11 @@ class ProcessorService {
     return result;
   }
 
-  // ─── Algorithm 3: Hard Spectral Gate ──────────────────────────────────
+  // ─── Algorithm 3: Soft Spectral Gate ──────────────────────────────────
+  // Quadratic gain rolloff below threshold instead of hard zero — eliminates
+  // musical noise (isolated surviving bins that create crackling artifacts).
 
-  static Float32List _hardSpectralGate(
+  static Float32List _softSpectralGate(
       Float32List samples, Float64List noiseProfile, AudioParams params) {
     const int FRAME = 2048;
     const int HOP = 512;
@@ -316,10 +326,13 @@ class ProcessorService {
         final mag = sqrt(re[k] * re[k] + im[k] * im[k]);
         final threshold =
             params.gateRatio * noiseProfile[k] * (params.gateThreshold / 100.0 + 0.5);
-        if (mag < threshold) {
-          re[k] = 0; im[k] = 0;
+        if (mag < threshold && threshold > 1e-12) {
+          // Smooth quadratic rolloff: gain = (mag/threshold)² → 0 at floor, 1 at threshold
+          final double t = mag / threshold;
+          final double gain = t * t;
+          re[k] *= gain; im[k] *= gain;
           if (k > 0 && k < FRAME ~/ 2) {
-            re[FRAME - k] = 0; im[FRAME - k] = 0;
+            re[FRAME - k] *= gain; im[FRAME - k] *= gain;
           }
         }
       }
@@ -682,22 +695,12 @@ class ProcessorService {
 
   static Float32List _applyEQ(Float32List samples, int rate, AudioParams params) {
     Float32List s = samples;
-
-    // High-pass at hpFreq, Q=0.707
-    s = _hpFilter(s, rate, params.hpFreq, 0.707);
-
-    // Low shelf at 200Hz: bassGain
-    s = _lowShelf(s, rate, 200.0, params.bassGain, 0.707);
-
-    // Peaking at 3500Hz: deHarshGain, Q=1.5
-    s = _peakingEQ(s, rate, 3500.0, params.deHarshGain, 1.5);
-
-    // Peaking at 5000Hz: presGain, Q=1.0
-    s = _peakingEQ(s, rate, 5000.0, params.presGain, 1.0);
-
-    // High shelf at 12000Hz: airGain, Q=0.707
-    s = _highShelf(s, rate, 12000.0, params.airGain, 0.707);
-
+    // High-pass — always apply when hpFreq > 20 Hz (removes DC / sub-bass rumble)
+    if (params.hpFreq > 20) s = _hpFilter(s, rate, params.hpFreq, 0.707);
+    if (params.bassGain.abs() > 0.1)     s = _lowShelf(s, rate, 200.0, params.bassGain, 0.707);
+    if (params.deHarshGain.abs() > 0.1)  s = _peakingEQ(s, rate, 3500.0, params.deHarshGain, 1.5);
+    if (params.presGain.abs() > 0.1)     s = _peakingEQ(s, rate, 5000.0, params.presGain, 1.0);
+    if (params.airGain.abs() > 0.1)      s = _highShelf(s, rate, 12000.0, params.airGain, 0.707);
     return s;
   }
 
@@ -873,7 +876,7 @@ class ProcessorService {
     }
     final rms = sqrt(sumSq / max(samples.length, 1));
     final currentLufs = 20.0 * log(max(rms, 1e-8)) / ln10;
-    final gain = pow(10.0, (targetLufs - currentLufs) / 20.0).toDouble().clamp(0.1, 10.0);
+    final gain = pow(10.0, (targetLufs - currentLufs) / 20.0).toDouble().clamp(0.1, 4.0);
 
     final result = Float32List(samples.length);
     for (int i = 0; i < samples.length; i++) {

@@ -35,7 +35,7 @@ class ParamSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = color ?? AppColors.violet;
+    final activeColor = color ?? AppColors.textPrim;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
