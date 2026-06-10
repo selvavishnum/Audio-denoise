@@ -68,31 +68,51 @@ class AudioParams {
   });
 
   static const Map<VoicePreset, AudioParams> presets = {
+    // Crispy = studio clarity via EQ. No pitch/formant shift — those cause robotic artifacts.
     VoicePreset.crispy: AudioParams(
-      pitchSemitones: 2, formantFactor: 1.14, exciterAmount: 55, smoothAmount: 55,
-      hpFreq: 85, bassGain: 1.0, deHarshGain: -2.5, presGain: 4.0, airGain: 4.0,
-      compThreshold: -18, compRatio: 3.5, deEssAmt: 40, targetLufs: -14,
-      preset: VoicePreset.crispy,
+      nrStrength: 68, nrAlpha: 93, nrFloor: 1.8,
+      gateThreshold: 18, gateRatio: 1.1,
+      vadSensitivity: 2.0, vadHoldMs: 250,
+      pitchSemitones: 0, formantFactor: 1.0,
+      exciterAmount: 18, smoothAmount: 0,
+      hpFreq: 100, bassGain: 0.5, deHarshGain: -2.5, presGain: 2.5, airGain: 3.5,
+      compThreshold: -22, compRatio: 2.5, deEssAmt: 30,
+      targetLufs: -14, preset: VoicePreset.crispy,
     ),
+    // Pop = warm + bright EQ. No pitch shift.
     VoicePreset.pop: AudioParams(
-      pitchSemitones: 3, formantFactor: 1.18, exciterAmount: 65, smoothAmount: 50,
-      hpFreq: 80, bassGain: 2.0, deHarshGain: -2.0, presGain: 3.5, airGain: 5.0,
-      compThreshold: -16, compRatio: 3.0, deEssAmt: 35, targetLufs: -14,
-      preset: VoicePreset.pop,
+      nrStrength: 65, nrAlpha: 92, nrFloor: 1.8,
+      gateThreshold: 20, gateRatio: 1.1,
+      vadSensitivity: 2.2, vadHoldMs: 250,
+      pitchSemitones: 0, formantFactor: 1.0,
+      exciterAmount: 22, smoothAmount: 0,
+      hpFreq: 80, bassGain: 1.5, deHarshGain: -2.0, presGain: 3.0, airGain: 4.0,
+      compThreshold: -18, compRatio: 3.0, deEssAmt: 35,
+      targetLufs: -14, preset: VoicePreset.pop,
     ),
+    // Radio = broadcast midrange focus, tight low end.
     VoicePreset.radio: AudioParams(
-      pitchSemitones: -1, formantFactor: 0.92, exciterAmount: 35, smoothAmount: 65,
-      hpFreq: 100, bassGain: 3.0, deHarshGain: -3.5, presGain: 1.5, airGain: -2.0,
-      compThreshold: -20, compRatio: 4.0, deEssAmt: 35, targetLufs: -14,
-      preset: VoicePreset.radio,
+      nrStrength: 70, nrAlpha: 94, nrFloor: 1.7,
+      gateThreshold: 22, gateRatio: 1.1,
+      vadSensitivity: 2.0, vadHoldMs: 300,
+      pitchSemitones: 0, formantFactor: 1.0,
+      exciterAmount: 10, smoothAmount: 0,
+      hpFreq: 150, bassGain: 3.0, deHarshGain: -3.5, presGain: 2.0, airGain: -1.0,
+      compThreshold: -20, compRatio: 4.0, deEssAmt: 35,
+      targetLufs: -14, preset: VoicePreset.radio,
     ),
+    // Deep = rich low-end enhancement.
     VoicePreset.deep: AudioParams(
-      pitchSemitones: -3, formantFactor: 0.85, exciterAmount: 45, smoothAmount: 60,
-      hpFreq: 60, bassGain: 4.0, deHarshGain: -1.5, presGain: 2.0, airGain: 1.0,
-      compThreshold: -22, compRatio: 3.5, deEssAmt: 30, targetLufs: -14,
-      preset: VoicePreset.deep,
+      nrStrength: 65, nrAlpha: 92, nrFloor: 1.8,
+      gateThreshold: 18, gateRatio: 1.1,
+      vadSensitivity: 2.2, vadHoldMs: 250,
+      pitchSemitones: 0, formantFactor: 1.0,
+      exciterAmount: 12, smoothAmount: 0,
+      hpFreq: 60, bassGain: 4.5, deHarshGain: -1.5, presGain: 1.0, airGain: 0,
+      compThreshold: -22, compRatio: 3.0, deEssAmt: 25,
+      targetLufs: -14, preset: VoicePreset.deep,
     ),
-    // Natural = pure background noise removal. Zero voice alteration.
+    // Natural/Clean = pure background noise removal. Zero voice alteration.
     VoicePreset.natural: AudioParams(
       nrStrength: 72, nrAlpha: 94, nrFloor: 1.6,
       gateThreshold: 15, gateRatio: 1.0,
@@ -101,12 +121,16 @@ class AudioParams {
       exciterAmount: 0, smoothAmount: 0,
       hpFreq: 60, bassGain: 0, deHarshGain: 0, presGain: 0, airGain: 0,
       compThreshold: 0, compRatio: 1.0, deEssAmt: 0,
-      targetLufs: -14,
-      preset: VoicePreset.natural,
+      targetLufs: -14, preset: VoicePreset.natural,
     ),
+    // Hype = aggressive EQ presence boost.
     VoicePreset.hype: AudioParams(
-      pitchSemitones: 2.5, formantFactor: 1.10, exciterAmount: 80, smoothAmount: 45,
-      hpFreq: 90, bassGain: 1.5, deHarshGain: -1.5, presGain: 5.0, airGain: 4.5,
+      nrStrength: 65, nrAlpha: 92, nrFloor: 1.8,
+      gateThreshold: 20, gateRatio: 1.2,
+      vadSensitivity: 2.2, vadHoldMs: 220,
+      pitchSemitones: 0, formantFactor: 1.0,
+      exciterAmount: 30, smoothAmount: 0,
+      hpFreq: 90, bassGain: 2.0, deHarshGain: -2.0, presGain: 5.0, airGain: 4.5,
       compThreshold: -14, compRatio: 5.0, deEssAmt: 50, targetLufs: -12,
       preset: VoicePreset.hype,
     ),
