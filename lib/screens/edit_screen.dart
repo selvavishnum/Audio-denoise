@@ -18,15 +18,16 @@ class EditScreen extends StatefulWidget {
 }
 
 class _EditScreenState extends State<EditScreen> {
-  // Selection range 0.0–1.0
   double _selStart = 0.0;
   double _selEnd   = 1.0;
 
-  // Tab: 0 = Trim, 1 = Join
+  // 0 = Trim, 1 = Join, 2 = Mix
   int _tab = 0;
 
-  // Second file for joining
   AudioData? _joinFile;
+  AudioData? _musicFile;
+  double     _voiceVol = 1.0;
+  double     _musicVol = 0.5;
 
   @override
   Widget build(BuildContext context) {
@@ -38,12 +39,13 @@ class _EditScreenState extends State<EditScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 28),
-            _header(context),
-            const SizedBox(height: 24),
+            _header(context, prov),
+            const SizedBox(height: 20),
             _tabBar(),
             const SizedBox(height: 20),
             if (_tab == 0) _trimView(context, prov),
             if (_tab == 1) _joinView(context, prov),
+            if (_tab == 2) _mixView(context, prov),
             const SizedBox(height: 40),
           ],
         ),
@@ -51,14 +53,68 @@ class _EditScreenState extends State<EditScreen> {
     );
   }
 
-  Widget _header(BuildContext context) => Column(
+  // ── Header with Undo / Restart ─────────────────────────────────────────
+
+  Widget _header(BuildContext context, AudioProvider prov) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text('Editor', style: Theme.of(context).textTheme.displayLarge),
-      const SizedBox(height: 4),
-      Text('Cut, trim and join audio', style: Theme.of(context).textTheme.bodyMedium),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Editor', style: Theme.of(context).textTheme.displayLarge),
+            const SizedBox(height: 4),
+            Text('Cut, trim, join and mix audio',
+                style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      ),
+      if (prov.originalAudio != null) ...[
+        _IconBtn(
+          icon: Icons.undo_rounded,
+          tooltip: 'Undo',
+          enabled: prov.canUndo,
+          onTap: () => prov.undo(),
+        ),
+        const SizedBox(width: 6),
+        _IconBtn(
+          icon: Icons.restart_alt_rounded,
+          tooltip: 'Restart to original',
+          enabled: true,
+          onTap: () => _confirmRestart(context, prov),
+        ),
+      ],
     ],
   );
+
+  void _confirmRestart(BuildContext context, AudioProvider prov) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Restart to original?',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrim)),
+        content: const Text('All edits (trim, join, mix) will be lost.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSec)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textDim)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              prov.restoreOriginal();
+              setState(() { _selStart = 0; _selEnd = 1; });
+            },
+            child: const Text('Restart',
+                style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _tabBar() => Container(
     height: 42,
@@ -70,6 +126,7 @@ class _EditScreenState extends State<EditScreen> {
     child: Row(children: [
       _TabPill(label: 'Trim & Cut', index: 0, current: _tab, onTap: (i) => setState(() => _tab = i)),
       _TabPill(label: 'Join',       index: 1, current: _tab, onTap: (i) => setState(() => _tab = i)),
+      _TabPill(label: 'Mix Music',  index: 2, current: _tab, onTap: (i) => setState(() => _tab = i)),
     ]),
   );
 
@@ -95,8 +152,7 @@ class _EditScreenState extends State<EditScreen> {
         const SizedBox(height: 20),
         RangeSlider(
           values:    RangeValues(_selStart, _selEnd),
-          min: 0, max: 1,
-          divisions: 200,
+          min: 0, max: 1, divisions: 200,
           activeColor:   AppColors.textPrim,
           inactiveColor: AppColors.border,
           onChanged: (v) {
@@ -111,12 +167,14 @@ class _EditScreenState extends State<EditScreen> {
           children: [
             Text(_fmtSec(startSec),
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                    color: AppColors.textPrim, fontFeatures: [FontFeature.tabularFigures()])),
+                    color: AppColors.textPrim,
+                    fontFeatures: [FontFeature.tabularFigures()])),
             Text('${_fmtSec(endSec - startSec)} selected',
                 style: const TextStyle(fontSize: 12, color: AppColors.textSec)),
             Text(_fmtSec(endSec),
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                    color: AppColors.textPrim, fontFeatures: [FontFeature.tabularFigures()])),
+                    color: AppColors.textPrim,
+                    fontFeatures: [FontFeature.tabularFigures()])),
           ],
         ),
         const SizedBox(height: 24),
@@ -129,7 +187,7 @@ class _EditScreenState extends State<EditScreen> {
           ),
           const SizedBox(width: 10),
           _ActionChip(
-            icon:   Icons.restart_alt_rounded,
+            icon:   Icons.select_all_rounded,
             label:  'Reset',
             filled: false,
             onTap:  () => setState(() { _selStart = 0; _selEnd = 1; }),
@@ -156,15 +214,13 @@ class _EditScreenState extends State<EditScreen> {
         LayoutBuilder(builder: (_, c) {
           final w = c.maxWidth;
           return Stack(children: [
-            Positioned(left: 0, top: 0, bottom: 0,
-                width: w * _selStart,
+            Positioned(left: 0, top: 0, bottom: 0, width: w * _selStart,
                 child: Container(color: AppColors.white.withValues(alpha: 0.65))),
-            Positioned(right: 0, top: 0, bottom: 0,
-                width: w * (1 - _selEnd),
+            Positioned(right: 0, top: 0, bottom: 0, width: w * (1 - _selEnd),
                 child: Container(color: AppColors.white.withValues(alpha: 0.65))),
             Positioned(left: w * _selStart - 1.5, top: 0, bottom: 0,
                 width: 3, child: Container(color: AppColors.textPrim)),
-            Positioned(left: w * _selEnd   - 1.5, top: 0, bottom: 0,
+            Positioned(left: w * _selEnd - 1.5,   top: 0, bottom: 0,
                 width: 3, child: Container(color: AppColors.textPrim)),
           ]);
         }),
@@ -253,6 +309,95 @@ class _EditScreenState extends State<EditScreen> {
         .showSnackBar(const SnackBar(content: Text('Files joined')));
   }
 
+  // ── Mix view ───────────────────────────────────────────────────────────
+
+  Widget _mixView(BuildContext context, AudioProvider prov) {
+    final audio = prov.originalAudio;
+    if (audio == null) {
+      return _emptyState(
+        icon:     Icons.music_note_rounded,
+        title:    'No voice audio loaded',
+        subtitle: 'Record or import audio first',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FileCard(
+          title:    'Voice audio',
+          subtitle: '${(audio.samples.length / audio.sampleRate).toStringAsFixed(1)}s  ·  ${audio.sampleRate} Hz',
+          hasFile: true,
+          onTap:   null,
+        ),
+        const SizedBox(height: 16),
+        _FileCard(
+          title:    'Background music',
+          subtitle: _musicFile != null
+              ? '${(_musicFile!.samples.length / _musicFile!.sampleRate).toStringAsFixed(1)}s  ·  ${_musicFile!.sampleRate} Hz'
+              : 'Tap to pick a music file (WAV, MP3, M4A)',
+          hasFile: _musicFile != null,
+          onTap:   _pickMusicFile,
+        ),
+        if (_musicFile != null) ...[
+          const SizedBox(height: 24),
+          _VolumeRow(
+            label: 'Voice',
+            icon:  Icons.mic_rounded,
+            value: _voiceVol,
+            onChanged: (v) => setState(() => _voiceVol = v),
+          ),
+          const SizedBox(height: 12),
+          _VolumeRow(
+            label: 'Music',
+            icon:  Icons.music_note_rounded,
+            value: _musicVol,
+            onChanged: (v) => setState(() => _musicVol = v),
+          ),
+          const SizedBox(height: 24),
+          _ActionChip(
+            icon:   Icons.merge_type_rounded,
+            label:  'Mix & Apply',
+            filled: true,
+            onTap:  () => _doMix(context, prov),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _pickMusicFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['wav', 'mp3', 'm4a', 'aac', 'flac'],
+    );
+    final path = result?.files.single.path;
+    if (path == null) return;
+
+    AudioData? data;
+    if (path.toLowerCase().endsWith('.wav')) {
+      final bytes = await File(path).readAsBytes();
+      data = ProcessorService.decodeWav(bytes);
+    } else {
+      // Use provider's internal converter for non-WAV
+      data = await context.read<AudioProvider>().convertFileToAudioData(path);
+    }
+
+    if (data == null && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Could not load music file')));
+      return;
+    }
+    if (mounted) setState(() => _musicFile = data);
+  }
+
+  void _doMix(BuildContext context, AudioProvider prov) {
+    if (_musicFile == null) return;
+    prov.mixWithMusic(_musicFile!, _voiceVol, _musicVol);
+    setState(() { _musicFile = null; _voiceVol = 1.0; _musicVol = 0.5; });
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Music mixed in')));
+  }
+
   // ── Shared helpers ─────────────────────────────────────────────────────
 
   Widget _emptyState({required IconData icon, required String title, required String subtitle}) =>
@@ -276,7 +421,76 @@ class _EditScreenState extends State<EditScreen> {
   }
 }
 
-// ── Local widgets ──────────────────────────────────────────────────────────────
+// ── Shared small widgets ───────────────────────────────────────────────────────
+
+class _IconBtn extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _IconBtn({required this.icon, required this.tooltip, required this.enabled, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border, width: 0.5),
+          ),
+          child: Icon(icon, size: 18,
+              color: enabled ? AppColors.textPrim : AppColors.textDim),
+        ),
+      ),
+    );
+  }
+}
+
+class _VolumeRow extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final double value;
+  final ValueChanged<double> onChanged;
+  const _VolumeRow({required this.label, required this.icon, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.textSec),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 54,
+          child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSec)),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor:   AppColors.textPrim,
+              inactiveTrackColor: AppColors.border,
+              thumbColor:         AppColors.textPrim,
+              overlayColor:       const Color(0x1A0A0A0A),
+              trackHeight:        2.5,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            ),
+            child: Slider(value: value, min: 0, max: 1, onChanged: onChanged),
+          ),
+        ),
+        SizedBox(
+          width: 36,
+          child: Text('${(value * 100).round()}%',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrim),
+              textAlign: TextAlign.end),
+        ),
+      ],
+    );
+  }
+}
 
 class _TabPill extends StatelessWidget {
   final String label;
@@ -299,7 +513,7 @@ class _TabPill extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: Text(label,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
                   color: active ? AppColors.white : AppColors.textDim)),
         ),
       ),
