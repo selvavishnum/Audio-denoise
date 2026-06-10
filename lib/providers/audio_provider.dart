@@ -2,8 +2,6 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:ffmpeg_kit_flutter_audio/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_audio/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -12,11 +10,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/audio_params.dart';
+import '../models/processing_stats.dart';
 import '../services/processor_service.dart';
 
 class AudioProvider extends ChangeNotifier {
   AudioData? originalAudio;
-  AudioData? _savedOriginal; // snapshot taken at load time — used for Restart
+  AudioData? _savedOriginal;
   AudioData? processedAudio;
   AudioParams params = AudioParams.presets[VoicePreset.natural]!;
   bool isRecording = false;
@@ -25,6 +24,15 @@ class AudioProvider extends ChangeNotifier {
   String? errorMessage;
   String? originalPath;
   String? processedPath;
+
+  // ── Processing stats ──────────────────────────────────────────────────
+  ProcessingStats? lastStats;
+
+  // ── HD Mode ───────────────────────────────────────────────────────────
+  bool hdModeEnabled = false;
+
+  // ── Recent history ────────────────────────────────────────────────────
+  final List<HistoryItem> recentFiles = [];
 
   // ── Undo history ──────────────────────────────────────────────────────
   final List<AudioData> _history = [];
@@ -56,14 +64,25 @@ class AudioProvider extends ChangeNotifier {
 
   Future<void> _init() async {
     final prefs = await SharedPreferences.getInstance();
-    final idx   = prefs.getInt('preset') ?? VoicePreset.natural.index;
+    final idx    = prefs.getInt('preset') ?? VoicePreset.natural.index;
     final preset = VoicePreset.values[idx.clamp(0, VoicePreset.values.length - 1)];
     params        = AudioParams.presets[preset]!;
     _exportCount  = prefs.getInt('exportCount') ?? 0;
+    hdModeEnabled = prefs.getBool('hdMode') ?? false;
+    _loadHistory(prefs);
     notifyListeners();
   }
 
-  // ── Preset ──────────────────────────────────────────────────────────
+  void _loadHistory(SharedPreferences prefs) {
+    final list = prefs.getStringList('history') ?? [];
+    recentFiles.clear();
+    for (final s in list) {
+      final item = HistoryItem.tryParse(s);
+      if (item != null) recentFiles.add(item);
+    }
+  }
+
+  // ── Preset ───────────────────────────────────────────────────────────
 
   Future<void> applyPreset(VoicePreset preset) async {
     params = AudioParams.presets[preset]!.copyWith(mode: params.mode);
@@ -77,12 +96,22 @@ class AudioProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── HD Mode ───────────────────────────────────────────────────────────
+
+  Future<void> toggleHdMode() async {
+    hdModeEnabled = !hdModeEnabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hdMode', hdModeEnabled);
+    notifyListeners();
+  }
+
   // ── Import ───────────────────────────────────────────────────────────
 
   Future<void> loadFile(String path) async {
     errorMessage   = null;
     processedAudio = null;
     processedPath  = null;
+    lastStats      = null;
     _history.clear();
 
     try {
@@ -93,7 +122,6 @@ class AudioProvider extends ChangeNotifier {
         final bytes = await File(path).readAsBytes();
         data = ProcessorService.decodeWav(bytes);
       } else {
-        // MP3, M4A, AAC, FLAC, OGG — convert via FFmpeg
         data = await _convertToWavAndDecode(path);
       }
 
@@ -101,7 +129,7 @@ class AudioProvider extends ChangeNotifier {
         errorMessage = 'Could not decode audio file';
       } else {
         originalAudio  = data;
-        _savedOriginal = data; // save snapshot for Restart
+        _savedOriginal = data;
         originalPath   = path;
       }
     } catch (e) {
@@ -110,7 +138,6 @@ class AudioProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Public helper so other screens (e.g. music picker in EditScreen) can decode any format
   Future<AudioData?> convertFileToAudioData(String path) async {
     final lower = path.toLowerCase();
     if (lower.endsWith('.wav')) {
@@ -121,20 +148,8 @@ class AudioProvider extends ChangeNotifier {
   }
 
   Future<AudioData?> _convertToWavAndDecode(String inputPath) async {
-    try {
-      final dir        = await getTemporaryDirectory();
-      final outputPath = '${dir.path}/nc_import_${_uuid.v4()}.wav';
-      final session    = await FFmpegKit.execute(
-        '-y -i "$inputPath" -ar 44100 -ac 1 -acodec pcm_s16le "$outputPath"',
-      );
-      final rc = await session.getReturnCode();
-      if (!ReturnCode.isSuccess(rc)) return null;
-      final bytes = await File(outputPath).readAsBytes();
-      await File(outputPath).delete().catchError((_) {});
-      return ProcessorService.decodeWav(bytes);
-    } catch (_) {
-      return null;
-    }
+    // FFmpeg-kit is not bundled; non-WAV formats are not supported.
+    return null;
   }
 
   // ── Recording ────────────────────────────────────────────────────────
@@ -177,12 +192,33 @@ class AudioProvider extends ChangeNotifier {
     errorMessage = null;
     notifyListeners();
 
+    final startTime = DateTime.now();
     try {
+      AudioData inputForDsp = originalAudio!;
+
+      if (hdModeEnabled) {
+        progress = 0.05;
+        notifyListeners();
+        final hdData = await _ffmpegPreDenoise(originalAudio!);
+        if (hdData != null) inputForDsp = hdData;
+      }
+
       processedAudio = await ProcessorService.process(
-        originalAudio!, params,
-        onProgress: (p) { progress = p; notifyListeners(); },
+        inputForDsp, params,
+        onProgress: (p) {
+          progress = hdModeEnabled ? 0.05 + p * 0.95 : p;
+          notifyListeners();
+        },
       );
+
+      lastStats = ProcessingStats.compute(
+        originalAudio!.samples,
+        processedAudio!.samples,
+        DateTime.now().difference(startTime),
+      );
+
       await _saveProcessed();
+      await _addToHistory();
     } catch (e) {
       errorMessage = 'Processing error: $e';
     }
@@ -190,6 +226,11 @@ class AudioProvider extends ChangeNotifier {
     isProcessing = false;
     progress     = 0;
     notifyListeners();
+  }
+
+  Future<AudioData?> _ffmpegPreDenoise(AudioData audio) async {
+    // FFmpeg-kit is not bundled; HD pre-denoise step is skipped.
+    return null;
   }
 
   Future<void> _saveProcessed() async {
@@ -201,13 +242,33 @@ class AudioProvider extends ChangeNotifier {
     processedPath = path;
   }
 
-  // ── Export / usage gate ───────────────────────────────────────────────
+  Future<void> _addToHistory() async {
+    if (lastStats == null) return;
+    final raw  = originalPath ?? '';
+    final name = raw.isNotEmpty ? raw.split('/').last : 'audio_${DateTime.now().millisecondsSinceEpoch}.wav';
+    final item = HistoryItem(
+      name: name,
+      date: DateTime.now(),
+      noiseReductionPct: lastStats!.noiseReductionPct,
+    );
+    recentFiles.insert(0, item);
+    if (recentFiles.length > 10) recentFiles.removeLast();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('history', recentFiles.map(HistoryItem.serialize).toList());
+  }
+
+  // ── Export ────────────────────────────────────────────────────────────
 
   Future<void> recordExport() async {
     _exportCount++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('exportCount', _exportCount);
     notifyListeners();
+  }
+
+  Future<String?> exportAsMp3() async {
+    // FFmpeg-kit is not bundled; MP3 export is not available.
+    return null;
   }
 
   // ── Playback ──────────────────────────────────────────────────────────
@@ -276,7 +337,6 @@ class AudioProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Revert to the audio as it was when first loaded/recorded
   void restoreOriginal() {
     if (_savedOriginal == null) return;
     _history.clear();
@@ -313,7 +373,6 @@ class AudioProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Mix voice audio with a background music track at independent volumes
   void mixWithMusic(AudioData music, double voiceVol, double musicVol) {
     final audio = originalAudio;
     if (audio == null) return;

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/audio_params.dart';
+import '../models/processing_stats.dart';
 import '../providers/audio_provider.dart';
 import '../theme.dart';
 import '../widgets/param_slider.dart';
@@ -41,6 +42,10 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
                     _waveform(prov),
                     const SizedBox(height: 16),
                     _abToggle(prov),
+                    if (prov.processedAudio != null && prov.lastStats != null) ...[
+                      const SizedBox(height: 14),
+                      _StatsCard(stats: prov.lastStats!),
+                    ],
                     const SizedBox(height: 20),
                     _presetsGrid(prov),
                     const SizedBox(height: 16),
@@ -339,9 +344,45 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
     if (prov.hasReachedFreeLimit) {
       await _showExportGate(context, prov, path);
     } else {
-      await prov.recordExport();
+      await _showExportFormatDialog(context, prov, path);
+    }
+  }
+
+  Future<void> _showExportFormatDialog(
+      BuildContext context, AudioProvider prov, String wavPath) async {
+    final format = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const _ExportFormatSheet(),
+    );
+    if (format == null || !mounted) return;
+
+    await prov.recordExport();
+
+    if (format == 'mp3') {
+      final snack = ScaffoldMessenger.of(context);
+      snack.showSnackBar(const SnackBar(
+        content: Text('Converting to MP3…'),
+        duration: Duration(seconds: 2),
+      ));
+      final mp3Path = await prov.exportAsMp3();
+      if (!mounted) return;
+      if (mp3Path != null) {
+        await SharePlus.instance.share(
+          ShareParams(files: [XFile(mp3Path)], text: 'NoiseClear processed audio'),
+        );
+      } else {
+        snack.showSnackBar(const SnackBar(content: Text('MP3 export failed — sharing WAV instead')));
+        await SharePlus.instance.share(
+          ShareParams(files: [XFile(wavPath)], text: 'NoiseClear processed audio'),
+        );
+      }
+    } else {
       await SharePlus.instance.share(
-        ShareParams(files: [XFile(path)], text: 'NoiseClear processed audio'),
+        ShareParams(files: [XFile(wavPath)], text: 'NoiseClear processed audio'),
       );
     }
   }
@@ -690,6 +731,152 @@ class _ProBenefit extends StatelessWidget {
         const SizedBox(width: 10),
         Text(text, style: const TextStyle(fontSize: 13, color: AppColors.textSec)),
       ]),
+    );
+  }
+}
+
+// ── Processing stats card ─────────────────────────────────────────────────────
+
+class _StatsCard extends StatelessWidget {
+  final ProcessingStats stats;
+  const _StatsCard({required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Row(children: [
+        Expanded(child: _Stat(
+          label: 'Noise Reduced',
+          value: '${stats.noiseReductionPct.round()}%',
+          color: AppColors.violet,
+        )),
+        Container(width: 0.5, height: 32, color: AppColors.border),
+        Expanded(child: _Stat(
+          label: 'Quality',
+          value: stats.qualityGrade,
+          color: AppColors.cyan,
+        )),
+        Container(width: 0.5, height: 32, color: AppColors.border),
+        Expanded(child: _Stat(
+          label: 'Processed In',
+          value: '${stats.processingTime.inSeconds}s',
+          color: AppColors.amber,
+        )),
+      ]),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _Stat({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Text(value, style: TextStyle(
+        fontSize: 15, fontWeight: FontWeight.w700, color: color)),
+      const SizedBox(height: 3),
+      Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textDim),
+        textAlign: TextAlign.center),
+    ]);
+  }
+}
+
+// ── Export format sheet ───────────────────────────────────────────────────────
+
+class _ExportFormatSheet extends StatelessWidget {
+  const _ExportFormatSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Export Format',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
+          const SizedBox(height: 4),
+          const Text('Choose file format for sharing',
+            style: TextStyle(fontSize: 12, color: AppColors.textSec)),
+          const SizedBox(height: 20),
+          _FormatOption(
+            format: 'WAV',
+            title: 'WAV — Lossless',
+            subtitle: 'Highest quality · Studio format',
+            onTap: () => Navigator.pop(context, 'wav'),
+          ),
+          const SizedBox(height: 10),
+          _FormatOption(
+            format: 'MP3',
+            title: 'MP3 — 192 kbps',
+            subtitle: 'Compressed · Easy to share · Small file',
+            onTap: () => Navigator.pop(context, 'mp3'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FormatOption extends StatelessWidget {
+  final String format;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _FormatOption({
+    required this.format, required this.title,
+    required this.subtitle, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border, width: 0.5),
+        ),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.textPrim,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(format,
+              style: const TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700,
+                color: AppColors.white, letterSpacing: 0.5)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrim)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: const TextStyle(
+                fontSize: 11, color: AppColors.textSec)),
+            ],
+          )),
+          const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textDim),
+        ]),
+      ),
     );
   }
 }

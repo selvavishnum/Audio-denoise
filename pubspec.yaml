@@ -32,9 +32,6 @@ dependencies:
   # Utils
   uuid: ^4.4.0
 
-  # Multi-format audio import (MP3, M4A, FLAC, OGG → WAV)
-  ffmpeg_kit_flutter_audio: ^6.0.3
-
   # Persistence (preset save, usage counter)
   shared_preferences: ^2.3.5
 
