@@ -64,7 +64,7 @@ class AudioParams {
     this.deEssAmt = 40,
     this.targetLufs = -14,
     this.mode = ProcessingMode.denoise,
-    this.preset = VoicePreset.crispy,
+    this.preset = VoicePreset.natural,
   });
 
   static const Map<VoicePreset, AudioParams> presets = {
@@ -81,8 +81,8 @@ class AudioParams {
       preset: VoicePreset.pop,
     ),
     VoicePreset.radio: AudioParams(
-      pitchSemitones: -1, formantFactor: 0.92, exciterAmount: 40, smoothAmount: 65,
-      hpFreq: 100, bassGain: 3.0, deHarshGain: -3.0, presGain: 2.5, airGain: 1.5,
+      pitchSemitones: -1, formantFactor: 0.92, exciterAmount: 35, smoothAmount: 65,
+      hpFreq: 100, bassGain: 3.0, deHarshGain: -3.5, presGain: 1.5, airGain: -2.0,
       compThreshold: -20, compRatio: 4.0, deEssAmt: 35, targetLufs: -14,
       preset: VoicePreset.radio,
     ),
@@ -93,9 +93,9 @@ class AudioParams {
       preset: VoicePreset.deep,
     ),
     VoicePreset.natural: AudioParams(
-      pitchSemitones: 1, formantFactor: 1.05, exciterAmount: 30, smoothAmount: 70,
-      hpFreq: 80, bassGain: 1.5, deHarshGain: -2.0, presGain: 2.5, airGain: 2.0,
-      compThreshold: -20, compRatio: 2.5, deEssAmt: 30, targetLufs: -14,
+      pitchSemitones: 0, formantFactor: 1.0, exciterAmount: 15, smoothAmount: 65,
+      hpFreq: 100, bassGain: 2.5, deHarshGain: -3.0, presGain: 0.0, airGain: -4.0,
+      compThreshold: -20, compRatio: 2.0, deEssAmt: 25, targetLufs: -14,
       preset: VoicePreset.natural,
     ),
     VoicePreset.hype: AudioParams(
