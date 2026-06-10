@@ -2,8 +2,6 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:ffmpeg_kit_flutter_audio/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_audio/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -150,20 +148,8 @@ class AudioProvider extends ChangeNotifier {
   }
 
   Future<AudioData?> _convertToWavAndDecode(String inputPath) async {
-    try {
-      final dir        = await getTemporaryDirectory();
-      final outputPath = '${dir.path}/nc_import_${_uuid.v4()}.wav';
-      final session    = await FFmpegKit.execute(
-        '-y -i "$inputPath" -ar 44100 -ac 1 -acodec pcm_s16le "$outputPath"',
-      );
-      final rc = await session.getReturnCode();
-      if (!ReturnCode.isSuccess(rc)) return null;
-      final bytes = await File(outputPath).readAsBytes();
-      try { await File(outputPath).delete(); } catch (_) {}
-      return ProcessorService.decodeWav(bytes);
-    } catch (_) {
-      return null;
-    }
+    // FFmpeg-kit is not bundled; non-WAV formats are not supported.
+    return null;
   }
 
   // ── Recording ────────────────────────────────────────────────────────
@@ -243,27 +229,8 @@ class AudioProvider extends ChangeNotifier {
   }
 
   Future<AudioData?> _ffmpegPreDenoise(AudioData audio) async {
-    try {
-      final dir        = await getTemporaryDirectory();
-      final inputPath  = '${dir.path}/hd_in_${_uuid.v4()}.wav';
-      final outputPath = '${dir.path}/hd_out_${_uuid.v4()}.wav';
-
-      await File(inputPath).writeAsBytes(
-          ProcessorService.encodeWav(audio.samples, audio.sampleRate));
-
-      final session = await FFmpegKit.execute(
-        '-y -i "$inputPath" -af afftdn=nf=-25 -ar 44100 -ac 1 -acodec pcm_s16le "$outputPath"',
-      );
-      final rc = await session.getReturnCode();
-      try { await File(inputPath).delete(); } catch (_) {}
-      if (!ReturnCode.isSuccess(rc)) return null;
-
-      final bytes = await File(outputPath).readAsBytes();
-      try { await File(outputPath).delete(); } catch (_) {}
-      return ProcessorService.decodeWav(bytes);
-    } catch (_) {
-      return null;
-    }
+    // FFmpeg-kit is not bundled; HD pre-denoise step is skipped.
+    return null;
   }
 
   Future<void> _saveProcessed() async {
@@ -300,19 +267,8 @@ class AudioProvider extends ChangeNotifier {
   }
 
   Future<String?> exportAsMp3() async {
-    if (processedPath == null) return null;
-    try {
-      final dir     = await getApplicationDocumentsDirectory();
-      final mp3Path = '${dir.path}/noiseclear_${_uuid.v4()}.mp3';
-      final session = await FFmpegKit.execute(
-        '-y -i "$processedPath" -codec:a libmp3lame -b:a 192k "$mp3Path"',
-      );
-      final rc = await session.getReturnCode();
-      if (!ReturnCode.isSuccess(rc)) return null;
-      return mp3Path;
-    } catch (_) {
-      return null;
-    }
+    // FFmpeg-kit is not bundled; MP3 export is not available.
+    return null;
   }
 
   // ── Playback ──────────────────────────────────────────────────────────

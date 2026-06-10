@@ -2,12 +2,6 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        // Fallback: com.arthenica artifacts (ffmpeg-kit) were published through
-        // Sonatype OSSRH. They appear in the Maven Central index but the
-        // repo.maven.apache.org CDN can return 403/404 for them. These two
-        // OSSRH endpoints serve the same artifacts and resolve reliably in CI.
-        maven { url 'https://oss.sonatype.org/content/repositories/releases/' }
-        maven { url 'https://s01.oss.sonatype.org/content/repositories/releases/' }
     }
 }
 

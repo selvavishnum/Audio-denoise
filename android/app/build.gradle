@@ -74,13 +74,7 @@ android {
         }
     }
 
-    packagingOptions {
-        pickFirst '**/libc++_shared.so'
-        pickFirst '**/libffmpegkit.so'
-        jniLibs {
-            useLegacyPackaging true
-        }
-    }
+
 }
 
 flutter {
