@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'providers/audio_provider.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/record_screen.dart';
 import 'screens/denoise_screen.dart';
 import 'screens/edit_screen.dart';
@@ -34,6 +36,11 @@ Future<void> _requestPermissions() async {
 class NoiseClearApp extends StatelessWidget {
   const NoiseClearApp({super.key});
 
+  static Future<bool> _isOnboarded() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('onboarded') ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
@@ -42,7 +49,16 @@ class NoiseClearApp extends StatelessWidget {
         title: 'NoiseClear',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
-        home: const RootShell(),
+        routes: {'/home': (_) => const RootShell()},
+        home: FutureBuilder<bool>(
+          future: _isOnboarded(),
+          builder: (ctx, snap) {
+            if (!snap.hasData) {
+              return const Scaffold(backgroundColor: AppColors.bg);
+            }
+            return snap.data! ? const RootShell() : const OnboardingScreen();
+          },
+        ),
       ),
     );
   }

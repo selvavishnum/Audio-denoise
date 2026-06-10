@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/audio_params.dart';
+import '../models/processing_stats.dart';
 import '../providers/audio_provider.dart';
 import '../theme.dart';
 
@@ -10,6 +11,7 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final prov = context.watch<AudioProvider>();
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -20,10 +22,10 @@ class SettingsScreen extends StatelessWidget {
             _header(context),
             const SizedBox(height: 32),
             _section(context, 'Default Preset', _presetSelector(context)),
-            const SizedBox(height: 8),
-            _section(context, 'Processing', _processingToggles(context)),
-            const SizedBox(height: 8),
+            _section(context, 'Processing', _processingToggles(context, prov)),
             _section(context, 'About', _about(context)),
+            if (prov.recentFiles.isNotEmpty)
+              _section(context, 'Recent Files', _historyList(prov)),
             const SizedBox(height: 40),
           ],
         ),
@@ -64,7 +66,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           child: content,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
       ],
     );
   }
@@ -124,7 +126,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _processingToggles(BuildContext context) {
+  Widget _processingToggles(BuildContext context, AudioProvider prov) {
     return Column(
       children: [
         _SettingsRow(
@@ -146,6 +148,18 @@ class SettingsScreen extends StatelessWidget {
           title: 'Voice Activity Detection',
           subtitle: 'Silence gating with adaptive hold time',
           trailing: const _Badge('On'),
+        ),
+        _divider(),
+        _SettingsRow(
+          icon: Icons.hd_rounded,
+          title: 'HD Mode',
+          subtitle: 'FFmpeg afftdn pre-processing for deeper noise removal',
+          trailing: Switch(
+            value: prov.hdModeEnabled,
+            onChanged: (_) => context.read<AudioProvider>().toggleHdMode(),
+            activeColor: AppColors.textPrim,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
         ),
       ],
     );
@@ -179,6 +193,19 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  Widget _historyList(AudioProvider prov) {
+    return Column(
+      children: prov.recentFiles.asMap().entries.map((e) {
+        final item   = e.value;
+        final isLast = e.key == prov.recentFiles.length - 1;
+        return Column(children: [
+          _HistoryRow(item: item),
+          if (!isLast) _divider(),
+        ]);
+      }).toList(),
+    );
+  }
+
   Widget _divider() => const Divider(
     height: 0,
     indent: 56,
@@ -197,7 +224,7 @@ class _SettingsRow extends StatelessWidget {
   const _SettingsRow({
     required this.icon,
     required this.title,
-    required this.subtitle,
+    this.subtitle = '',
     this.trailing,
   });
 
@@ -221,26 +248,18 @@ class _SettingsRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrim,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSec),
-                ),
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrim)),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSec)),
+                ],
               ],
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 8),
-            trailing!,
-          ],
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
         ],
       ),
     );
@@ -259,14 +278,57 @@ class _Badge extends StatelessWidget {
         color: AppColors.textPrim,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.white,
-        ),
-      ),
+      child: Text(label,
+          style: const TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.white)),
     );
+  }
+}
+
+class _HistoryRow extends StatelessWidget {
+  final HistoryItem item;
+  const _HistoryRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.border,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.audio_file_rounded, size: 18, color: AppColors.textSec),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(item.name,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrim),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 2),
+            Text(_timeAgo(item.date),
+                style: const TextStyle(fontSize: 11, color: AppColors.textSec)),
+          ]),
+        ),
+        Text(
+          '${item.noiseReductionPct.round()}% cleaned',
+          style: const TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textDim),
+        ),
+      ]),
+    );
+  }
+
+  static String _timeAgo(DateTime date) {
+    final diff = DateTime.now().difference(date);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 }
