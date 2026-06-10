@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../models/audio_params.dart';
+import '../models/audio_params.dart' show VoicePreset;
 import '../theme.dart';
 
 class PresetCard extends StatelessWidget {
@@ -18,23 +18,28 @@ class PresetCard extends StatelessWidget {
 
   static const _meta = {
     VoicePreset.crispy: _PresetMeta('✨', 'CRISPY', 'Studio Polish',
+        'Clarity · Air · De-harsh',
         [Color(0xFF8B5CF6), Color(0xFFA78BFA)]),
     VoicePreset.pop: _PresetMeta('🎤', 'POP', 'Chart Ready',
+        'Warm · Bright · Present',
         [Color(0xFFEC4899), Color(0xFFF472B6)]),
     VoicePreset.radio: _PresetMeta('📻', 'RADIO', 'Broadcast Grade',
+        'Midrange · Tight · Focused',
         [Color(0xFF06B6D4), Color(0xFF22D3EE)]),
-    VoicePreset.deep: _PresetMeta('🔊', 'DEEP', 'Rich Bass Voice',
+    VoicePreset.deep: _PresetMeta('🔊', 'DEEP', 'Rich Bass',
+        'Low-end · Warm · Full',
         [Color(0xFF3B82F6), Color(0xFF60A5FA)]),
     VoicePreset.natural: _PresetMeta('🎙️', 'CLEAN', 'Noise Only',
+        'No voice change',
         [Color(0xFF22C55E), Color(0xFF4ADE80)]),
     VoicePreset.hype: _PresetMeta('⚡', 'HYPE', 'High Energy',
+        'Presence · Air · Punchy',
         [Color(0xFFF59E0B), Color(0xFFFBBF24)]),
   };
 
   @override
   Widget build(BuildContext context) {
     final m = _meta[preset]!;
-    final p = AudioParams.presets[preset]!;
 
     return GestureDetector(
       onTap: onTap,
@@ -96,15 +101,7 @@ class PresetCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Pitch ${p.pitchSemitones >= 0 ? '+' : ''}${p.pitchSemitones.toStringAsFixed(1)}st',
-                style: GoogleFonts.inter(
-                  color: isSelected ? Colors.white.withValues(alpha: 0.75) : AppColors.textDim,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                'Formant ×${p.formantFactor.toStringAsFixed(2)}',
+                m.eqTag,
                 style: GoogleFonts.inter(
                   color: isSelected ? Colors.white.withValues(alpha: 0.75) : AppColors.textDim,
                   fontSize: 10,
@@ -123,6 +120,7 @@ class _PresetMeta {
   final String icon;
   final String name;
   final String subtitle;
+  final String eqTag;
   final List<Color> colors;
-  const _PresetMeta(this.icon, this.name, this.subtitle, this.colors);
+  const _PresetMeta(this.icon, this.name, this.subtitle, this.eqTag, this.colors);
 }
