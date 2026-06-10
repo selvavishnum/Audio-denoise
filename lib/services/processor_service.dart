@@ -51,13 +51,13 @@ class ProcessorService {
     void progress(double p) => sendPort.send(p);
 
     progress(0.02);
-    final noiseProfile = _buildNoiseProfile(s, rate);
+    final noiseProfile = _buildNoiseProfile(s, rate, params);
 
     progress(0.10);
     s = _wienerFilter(s, noiseProfile, params);
 
     progress(0.22);
-    s = _hardSpectralGate(s, noiseProfile, params);
+    s = _softSpectralGate(s, noiseProfile, params);
 
     progress(0.32);
     s = _vadGate(s, rate, params);
@@ -184,7 +184,7 @@ class ProcessorService {
 
   // ─── Algorithm 1: Build Noise Profile ─────────────────────────────────
 
-  static Float64List _buildNoiseProfile(Float32List samples, int rate) {
+  static Float64List _buildNoiseProfile(Float32List samples, int rate, AudioParams params) {
     const int FRAME = 2048;
     const int HOP = 512;
     final hann = FFTService.hannWindow(FRAME);
@@ -231,7 +231,7 @@ class ProcessorService {
       }
     }
     for (int k = 0; k < profile.length; k++) {
-      profile[k] = (profile[k] / numNoise) * 4.0; // nrFloor-like scaling
+      profile[k] = (profile[k] / numNoise) * params.nrFloor;
     }
     return profile;
   }
@@ -292,9 +292,11 @@ class ProcessorService {
     return result;
   }
 
-  // ─── Algorithm 3: Hard Spectral Gate ──────────────────────────────────
+  // ─── Algorithm 3: Soft Spectral Gate ──────────────────────────────────
+  // Quadratic gain rolloff below threshold instead of hard zero — eliminates
+  // musical noise (isolated surviving bins that create crackling artifacts).
 
-  static Float32List _hardSpectralGate(
+  static Float32List _softSpectralGate(
       Float32List samples, Float64List noiseProfile, AudioParams params) {
     const int FRAME = 2048;
     const int HOP = 512;
@@ -316,10 +318,13 @@ class ProcessorService {
         final mag = sqrt(re[k] * re[k] + im[k] * im[k]);
         final threshold =
             params.gateRatio * noiseProfile[k] * (params.gateThreshold / 100.0 + 0.5);
-        if (mag < threshold) {
-          re[k] = 0; im[k] = 0;
+        if (mag < threshold && threshold > 1e-12) {
+          // Smooth quadratic rolloff: gain = (mag/threshold)² → 0 at floor, 1 at threshold
+          final double t = mag / threshold;
+          final double gain = t * t;
+          re[k] *= gain; im[k] *= gain;
           if (k > 0 && k < FRAME ~/ 2) {
-            re[FRAME - k] = 0; im[FRAME - k] = 0;
+            re[FRAME - k] *= gain; im[FRAME - k] *= gain;
           }
         }
       }
@@ -873,7 +878,7 @@ class ProcessorService {
     }
     final rms = sqrt(sumSq / max(samples.length, 1));
     final currentLufs = 20.0 * log(max(rms, 1e-8)) / ln10;
-    final gain = pow(10.0, (targetLufs - currentLufs) / 20.0).toDouble().clamp(0.1, 10.0);
+    final gain = pow(10.0, (targetLufs - currentLufs) / 20.0).toDouble().clamp(0.1, 4.0);
 
     final result = Float32List(samples.length);
     for (int i = 0; i < samples.length; i++) {

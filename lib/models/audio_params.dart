@@ -42,13 +42,13 @@ class AudioParams {
   final VoicePreset preset;
 
   const AudioParams({
-    this.nrStrength = 85,
-    this.nrAlpha = 88,
-    this.nrFloor = 4,
-    this.gateThreshold = 70,
-    this.gateRatio = 2.0,
-    this.vadSensitivity = 4,
-    this.vadHoldMs = 80,
+    this.nrStrength = 60,
+    this.nrAlpha = 92,
+    this.nrFloor = 2.0,
+    this.gateThreshold = 30,
+    this.gateRatio = 1.2,
+    this.vadSensitivity = 2.5,
+    this.vadHoldMs = 200,
     this.pitchSemitones = 2,
     this.formantFactor = 1.12,
     this.exciterAmount = 55,
