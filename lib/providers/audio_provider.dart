@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -160,7 +159,7 @@ class AudioProvider extends ChangeNotifier {
       final rc = await session.getReturnCode();
       if (!ReturnCode.isSuccess(rc)) return null;
       final bytes = await File(outputPath).readAsBytes();
-      await File(outputPath).delete().catchError((_) {});
+      try { await File(outputPath).delete(); } catch (_) {}
       return ProcessorService.decodeWav(bytes);
     } catch (_) {
       return null;
@@ -256,11 +255,11 @@ class AudioProvider extends ChangeNotifier {
         '-y -i "$inputPath" -af afftdn=nf=-25 -ar 44100 -ac 1 -acodec pcm_s16le "$outputPath"',
       );
       final rc = await session.getReturnCode();
-      await File(inputPath).delete().catchError((_) {});
+      try { await File(inputPath).delete(); } catch (_) {}
       if (!ReturnCode.isSuccess(rc)) return null;
 
       final bytes = await File(outputPath).readAsBytes();
-      await File(outputPath).delete().catchError((_) {});
+      try { await File(outputPath).delete(); } catch (_) {}
       return ProcessorService.decodeWav(bytes);
     } catch (_) {
       return null;
