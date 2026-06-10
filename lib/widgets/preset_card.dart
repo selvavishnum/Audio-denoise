@@ -25,7 +25,7 @@ class PresetCard extends StatelessWidget {
         [Color(0xFF06B6D4), Color(0xFF22D3EE)]),
     VoicePreset.deep: _PresetMeta('🔊', 'DEEP', 'Rich Bass Voice',
         [Color(0xFF3B82F6), Color(0xFF60A5FA)]),
-    VoicePreset.natural: _PresetMeta('🍃', 'NATURAL', 'True to Life',
+    VoicePreset.natural: _PresetMeta('🎙️', 'CLEAN', 'Noise Only',
         [Color(0xFF22C55E), Color(0xFF4ADE80)]),
     VoicePreset.hype: _PresetMeta('⚡', 'HYPE', 'High Energy',
         [Color(0xFFF59E0B), Color(0xFFFBBF24)]),

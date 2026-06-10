@@ -92,10 +92,16 @@ class AudioParams {
       compThreshold: -22, compRatio: 3.5, deEssAmt: 30, targetLufs: -14,
       preset: VoicePreset.deep,
     ),
+    // Natural = pure background noise removal. Zero voice alteration.
     VoicePreset.natural: AudioParams(
-      pitchSemitones: 0, formantFactor: 1.0, exciterAmount: 15, smoothAmount: 65,
-      hpFreq: 100, bassGain: 2.5, deHarshGain: -3.0, presGain: 0.0, airGain: -4.0,
-      compThreshold: -20, compRatio: 2.0, deEssAmt: 25, targetLufs: -14,
+      nrStrength: 72, nrAlpha: 94, nrFloor: 1.6,
+      gateThreshold: 15, gateRatio: 1.0,
+      vadSensitivity: 1.8, vadHoldMs: 300,
+      pitchSemitones: 0, formantFactor: 1.0,
+      exciterAmount: 0, smoothAmount: 0,
+      hpFreq: 60, bassGain: 0, deHarshGain: 0, presGain: 0, airGain: 0,
+      compThreshold: 0, compRatio: 1.0, deEssAmt: 0,
+      targetLufs: -14,
       preset: VoicePreset.natural,
     ),
     VoicePreset.hype: AudioParams(

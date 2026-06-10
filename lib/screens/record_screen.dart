@@ -154,7 +154,7 @@ class _RecordScreenState extends State<RecordScreen>
 
   Widget _presets(AudioProvider prov) {
     const labels = {
-      VoicePreset.natural: 'Natural',
+      VoicePreset.natural: 'Clean',
       VoicePreset.crispy:  'Crispy',
       VoicePreset.radio:   'Radio',
       VoicePreset.deep:    'Deep',

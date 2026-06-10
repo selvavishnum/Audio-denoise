@@ -72,7 +72,7 @@ class SettingsScreen extends StatelessWidget {
   Widget _presetSelector(BuildContext context) {
     final prov = context.watch<AudioProvider>();
     const labels = {
-      VoicePreset.natural: 'Natural',
+      VoicePreset.natural: 'Clean',
       VoicePreset.crispy:  'Crispy',
       VoicePreset.radio:   'Radio',
       VoicePreset.deep:    'Deep',
