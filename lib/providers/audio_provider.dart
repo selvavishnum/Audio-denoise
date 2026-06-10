@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -12,7 +13,7 @@ import '../services/processor_service.dart';
 class AudioProvider extends ChangeNotifier {
   AudioData? originalAudio;
   AudioData? processedAudio;
-  AudioParams params = AudioParams.presets[VoicePreset.crispy]!;
+  AudioParams params = AudioParams.presets[VoicePreset.natural]!;
   bool isRecording = false;
   bool isProcessing = false;
   double progress = 0.0;
@@ -199,6 +200,33 @@ class AudioProvider extends ChangeNotifier {
     await _procPlayer.stop();
     _playingOrig = false;
     _playingProc = false;
+    notifyListeners();
+  }
+
+  // ── Edit operations ───────────────────────────────────────────────────
+
+  void trimAudio(double startSec, double endSec) {
+    final audio = originalAudio;
+    if (audio == null) return;
+    final sr    = audio.sampleRate;
+    final start = (startSec * sr).round().clamp(0, audio.samples.length);
+    final end   = (endSec   * sr).round().clamp(start, audio.samples.length);
+    final trimmed = Float32List.fromList(audio.samples.sublist(start, end));
+    originalAudio  = AudioData.fromSamples(trimmed, sr);
+    processedAudio = null;
+    processedPath  = null;
+    notifyListeners();
+  }
+
+  void joinAudio(AudioData second) {
+    final audio = originalAudio;
+    if (audio == null) return;
+    final combined = Float32List(audio.samples.length + second.samples.length);
+    combined.setAll(0, audio.samples);
+    combined.setAll(audio.samples.length, second.samples);
+    originalAudio  = AudioData.fromSamples(combined, audio.sampleRate);
+    processedAudio = null;
+    processedPath  = null;
     notifyListeners();
   }
 
