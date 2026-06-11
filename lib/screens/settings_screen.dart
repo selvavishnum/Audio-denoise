@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 import '../models/audio_params.dart';
 import '../models/processing_stats.dart';
 import '../providers/audio_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/subscription_provider.dart';
 import '../theme.dart';
+import 'paywall_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -12,6 +15,8 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<AudioProvider>();
+    final sub  = context.watch<SubscriptionProvider>();
+    final auth = context.watch<AuthProvider>();
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -21,6 +26,7 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 28),
             _header(context),
             const SizedBox(height: 32),
+            _section(context, 'Account', _accountSection(context, auth, sub)),
             _section(context, 'Default Preset', _presetSelector(context)),
             _section(context, 'Processing', _processingToggles(context, prov)),
             _section(context, 'About', _about(context)),
@@ -68,6 +74,144 @@ class SettingsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 20),
       ],
+    );
+  }
+
+  Widget _accountSection(BuildContext context, AuthProvider auth, SubscriptionProvider sub) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Profile card ──────────────────────────────────────────────
+          Row(children: [
+            // Avatar
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: auth.isLoggedIn && auth.photoUrl != null
+                  ? Image.network(auth.photoUrl!, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _initials(auth.displayName))
+                  : _initials(auth.displayName),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  auth.isLoggedIn && auth.displayName.isNotEmpty
+                      ? auth.displayName
+                      : 'Guest User',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrim),
+                ),
+                const SizedBox(height: 3),
+                if (auth.isLoggedIn && auth.email.isNotEmpty)
+                  Text(auth.email,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSec),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                if (!auth.isLoggedIn)
+                  const Text('Sign in to unlock Pro plans',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSec)),
+              ]),
+            ),
+            // Plan badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: sub.isPro ? AppColors.textPrim : AppColors.surface,
+                borderRadius: BorderRadius.circular(20),
+                border: sub.isPro ? null : Border.all(color: AppColors.border, width: 0.5),
+              ),
+              child: Text(
+                sub.isPro ? sub.planLabel : 'Free',
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w700,
+                    color: sub.isPro ? AppColors.white : AppColors.textSec),
+              ),
+            ),
+          ]),
+
+          const SizedBox(height: 16),
+          const Divider(height: 0, color: AppColors.border, thickness: 0.5),
+          const SizedBox(height: 14),
+
+          // ── Actions ───────────────────────────────────────────────────
+          if (!sub.isPro)
+            GestureDetector(
+              onTap: () => Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.textPrim,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text('Upgrade to Pro',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                        color: AppColors.white)),
+              ),
+            ),
+          if (sub.isPro && auth.isLoggedIn) ...[
+            GestureDetector(
+              onTap: () async {
+                await context.read<AuthProvider>().signOut();
+                await context.read<SubscriptionProvider>().logoutUser();
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border, width: 0.5),
+                ),
+                child: const Text('Sign Out',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                        color: AppColors.textSec)),
+              ),
+            ),
+          ],
+          if (!auth.isLoggedIn) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border, width: 0.5),
+                ),
+                child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.login_rounded, size: 16, color: AppColors.textSec),
+                  SizedBox(width: 8),
+                  Text('Sign in with Google',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                          color: AppColors.textSec)),
+                ]),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _initials(String name) {
+    final letter = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Center(
+      child: Text(letter,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
+              color: AppColors.textSec)),
     );
   }
 
@@ -133,21 +277,36 @@ class SettingsScreen extends StatelessWidget {
           icon: Icons.graphic_eq_rounded,
           title: 'Noise Reduction',
           subtitle: 'MMSE Wiener filter with spectral gating',
-          trailing: const _Badge('On'),
+          trailing: Switch(
+            value: prov.noiseReductionEnabled,
+            onChanged: (_) => context.read<AudioProvider>().toggleNoiseReduction(),
+            activeColor: AppColors.textPrim,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
         ),
         _divider(),
         _SettingsRow(
           icon: Icons.compress_rounded,
           title: 'Dynamic Compression',
           subtitle: 'Automatic level and loudness control',
-          trailing: const _Badge('On'),
+          trailing: Switch(
+            value: prov.compressionEnabled,
+            onChanged: (_) => context.read<AudioProvider>().toggleCompression(),
+            activeColor: AppColors.textPrim,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
         ),
         _divider(),
         _SettingsRow(
           icon: Icons.hearing_rounded,
           title: 'Voice Activity Detection',
           subtitle: 'Silence gating with adaptive hold time',
-          trailing: const _Badge('On'),
+          trailing: Switch(
+            value: prov.vadEnabled,
+            onChanged: (_) => context.read<AudioProvider>().toggleVad(),
+            activeColor: AppColors.textPrim,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
         ),
         _divider(),
         _SettingsRow(
@@ -176,18 +335,6 @@ class SettingsScreen extends StatelessWidget {
             'v1.0.0',
             style: TextStyle(fontSize: 12, color: AppColors.textDim),
           ),
-        ),
-        _divider(),
-        _SettingsRow(
-          icon: Icons.tune_rounded,
-          title: 'Audio Engine',
-          subtitle: 'MMSE Wiener  ·  Soft spectral gate  ·  LUFS normalize',
-        ),
-        _divider(),
-        _SettingsRow(
-          icon: Icons.code_rounded,
-          title: 'Built with Flutter',
-          subtitle: 'Flutter 3.44 · Dart 3.12 · Android API 24+',
         ),
       ],
     );
@@ -266,24 +413,6 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
-class _Badge extends StatelessWidget {
-  final String label;
-  const _Badge(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.textPrim,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(label,
-          style: const TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.white)),
-    );
-  }
-}
 
 class _HistoryRow extends StatelessWidget {
   final HistoryItem item;

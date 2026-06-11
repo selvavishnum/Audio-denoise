@@ -31,6 +31,11 @@ class AudioProvider extends ChangeNotifier {
   // ── HD Mode ───────────────────────────────────────────────────────────
   bool hdModeEnabled = false;
 
+  // ── Processing feature toggles ────────────────────────────────────────
+  bool noiseReductionEnabled = true;
+  bool compressionEnabled    = true;
+  bool vadEnabled            = true;
+
   // ── Recent history ────────────────────────────────────────────────────
   final List<HistoryItem> recentFiles = [];
 
@@ -41,10 +46,22 @@ class AudioProvider extends ChangeNotifier {
 
   // ── Usage / monetization counter ──────────────────────────────────────
   int _exportCount = 0;
-  static const int freeExportLimit = 10;
+  static const int freeExportLimit = 30;
   int get exportCount => _exportCount;
   int get freeExportsLeft => max(0, freeExportLimit - _exportCount);
   bool get hasReachedFreeLimit => _exportCount >= freeExportLimit;
+
+  // ── Daily ad bonus ────────────────────────────────────────────────────
+  String? _lastBonusDate;
+  bool get canUseDailyBonus {
+    if (_lastBonusDate == null) return true;
+    return _lastBonusDate != _todayString();
+  }
+
+  static String _todayString() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
 
   // ── Playback ──────────────────────────────────────────────────────────
   final _origPlayer = AudioPlayer();
@@ -67,8 +84,12 @@ class AudioProvider extends ChangeNotifier {
     final idx    = prefs.getInt('preset') ?? VoicePreset.natural.index;
     final preset = VoicePreset.values[idx.clamp(0, VoicePreset.values.length - 1)];
     params        = AudioParams.presets[preset]!;
-    _exportCount  = prefs.getInt('exportCount') ?? 0;
-    hdModeEnabled = prefs.getBool('hdMode') ?? false;
+    _exportCount           = prefs.getInt('exportCount') ?? 0;
+    hdModeEnabled          = prefs.getBool('hdMode') ?? false;
+    _lastBonusDate         = prefs.getString('lastBonusDate');
+    noiseReductionEnabled  = prefs.getBool('nrEnabled')   ?? true;
+    compressionEnabled     = prefs.getBool('compEnabled') ?? true;
+    vadEnabled             = prefs.getBool('vadEnabled')  ?? true;
     _loadHistory(prefs);
     notifyListeners();
   }
@@ -102,6 +123,27 @@ class AudioProvider extends ChangeNotifier {
     hdModeEnabled = !hdModeEnabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hdMode', hdModeEnabled);
+    notifyListeners();
+  }
+
+  Future<void> toggleNoiseReduction() async {
+    noiseReductionEnabled = !noiseReductionEnabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('nrEnabled', noiseReductionEnabled);
+    notifyListeners();
+  }
+
+  Future<void> toggleCompression() async {
+    compressionEnabled = !compressionEnabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('compEnabled', compressionEnabled);
+    notifyListeners();
+  }
+
+  Future<void> toggleVad() async {
+    vadEnabled = !vadEnabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('vadEnabled', vadEnabled);
     notifyListeners();
   }
 
@@ -263,6 +305,13 @@ class AudioProvider extends ChangeNotifier {
     _exportCount++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('exportCount', _exportCount);
+    notifyListeners();
+  }
+
+  Future<void> useDailyBonus() async {
+    _lastBonusDate = _todayString();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('lastBonusDate', _lastBonusDate!);
     notifyListeners();
   }
 
