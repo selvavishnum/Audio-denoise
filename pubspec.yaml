@@ -32,6 +32,18 @@ dependencies:
   # Utils
   uuid: ^4.4.0
 
+  # Auth & Firebase
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  google_sign_in: ^6.2.1
+  firebase_analytics: ^11.3.3
+
+  # Monetization
+  purchases_flutter: ^8.0.0
+
+  # Ads
+  google_mobile_ads: ^5.1.0
+
   # Persistence (preset save, usage counter)
   shared_preferences: ^2.3.5
 

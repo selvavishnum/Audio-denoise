@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 import '../models/audio_params.dart';
 import '../models/processing_stats.dart';
 import '../providers/audio_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/subscription_provider.dart';
 import '../theme.dart';
+import 'paywall_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -12,6 +15,8 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<AudioProvider>();
+    final sub  = context.watch<SubscriptionProvider>();
+    final auth = context.watch<AuthProvider>();
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -21,6 +26,7 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 28),
             _header(context),
             const SizedBox(height: 32),
+            _section(context, 'Account', _accountSection(context, auth, sub)),
             _section(context, 'Default Preset', _presetSelector(context)),
             _section(context, 'Processing', _processingToggles(context, prov)),
             _section(context, 'About', _about(context)),
@@ -67,6 +73,53 @@ class SettingsScreen extends StatelessWidget {
           child: content,
         ),
         const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _accountSection(BuildContext context, AuthProvider auth, SubscriptionProvider sub) {
+    return Column(
+      children: [
+        _SettingsRow(
+          icon: sub.isPro ? Icons.workspace_premium_rounded : Icons.person_outline_rounded,
+          title: sub.isPro ? sub.planLabel : 'Free Plan',
+          subtitle: sub.isPro
+              ? (auth.isLoggedIn ? auth.email : 'Unlimited access unlocked')
+              : '${30} exports free · 1/day with ad after',
+          trailing: sub.isPro
+              ? const _Badge('Active')
+              : GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PaywallScreen()),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.textPrim,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text('Upgrade',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                            color: AppColors.white)),
+                  ),
+                ),
+        ),
+        if (auth.isLoggedIn) ...[
+          _divider(),
+          _SettingsRow(
+            icon: Icons.logout_rounded,
+            title: 'Sign Out',
+            subtitle: auth.email,
+            trailing: GestureDetector(
+              onTap: () async {
+                await context.read<AuthProvider>().signOut();
+                await context.read<SubscriptionProvider>().logoutUser();
+              },
+              child: const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textDim),
+            ),
+          ),
+        ],
       ],
     );
   }

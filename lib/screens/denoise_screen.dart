@@ -6,10 +6,14 @@ import 'package:share_plus/share_plus.dart';
 import '../models/audio_params.dart';
 import '../models/processing_stats.dart';
 import '../providers/audio_provider.dart';
+import '../providers/subscription_provider.dart';
+import '../services/ad_service.dart';
+import '../services/analytics_service.dart';
 import '../theme.dart';
 import '../widgets/param_slider.dart';
 import '../widgets/preset_card.dart';
 import '../widgets/waveform_painter.dart';
+import 'paywall_screen.dart';
 
 class DenoiseScreen extends StatefulWidget {
   const DenoiseScreen({super.key});
@@ -85,30 +89,7 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
             Text('Import audio and remove noise', style: Theme.of(context).textTheme.bodyMedium),
           ],
         )),
-        if (!prov.hasReachedFreeLimit)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.border, width: 0.5),
-            ),
-            child: Text(
-              '${prov.freeExportsLeft} free left',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSec),
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.textPrim,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text('PRO',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.white, letterSpacing: 0.5),
-            ),
-          ),
+        _buildExportBadge(context, prov),
       ],
     );
   }
@@ -337,14 +318,41 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
     }
   }
 
+  Widget _buildExportBadge(BuildContext context, AudioProvider prov) {
+    final isPro = context.watch<SubscriptionProvider>().isPro;
+    if (isPro) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(color: AppColors.textPrim, borderRadius: BorderRadius.circular(20)),
+        child: const Text('PRO',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                color: AppColors.white, letterSpacing: 0.5)),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Text(
+        prov.hasReachedFreeLimit ? 'Limit reached' : '${prov.freeExportsLeft} free left',
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSec),
+      ),
+    );
+  }
+
   Future<void> _export(BuildContext context, AudioProvider prov) async {
     final path = prov.shareFilePath;
     if (path == null) return;
 
-    if (prov.hasReachedFreeLimit) {
-      await _showExportGate(context, prov, path);
-    } else {
+    final isPro = context.read<SubscriptionProvider>().isPro;
+    if (isPro || !prov.hasReachedFreeLimit) {
       await _showExportFormatDialog(context, prov, path);
+    } else {
+      await AnalyticsService.logFreeLimitReached();
+      await _showExportGate(context, prov, path);
     }
   }
 
@@ -395,93 +403,42 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => _ExportGateSheet(
+        canWatchAd: prov.canUseDailyBonus && AdService.isReady,
         onWatchAd: () async {
           Navigator.pop(context);
-          await _simulateAdAndExport(context, prov, path);
+          await _showRewardedAd(context, prov, path);
         },
         onUpgrade: () {
           Navigator.pop(context);
-          _showUpgradeDialog(context);
+          _openPaywall(context);
         },
       ),
     );
   }
 
-  Future<void> _simulateAdAndExport(BuildContext context, AudioProvider prov, String path) async {
-    // Ad countdown simulation — replace with real ad SDK call in production
-    int countdown = 5;
-    if (!mounted) return;
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) {
-          Future.delayed(const Duration(seconds: 1), () {
-            if (mounted && ctx.mounted) {
-              countdown--;
-              if (countdown <= 0) {
-                Navigator.pop(ctx);
-              } else {
-                setS(() {});
-              }
-            }
-          });
-          return AlertDialog(
-            backgroundColor: AppColors.bg,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            content: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.play_circle_outline_rounded, size: 48, color: AppColors.textPrim),
-              const SizedBox(height: 12),
-              Text('Ad playing… $countdown',
-                  style: const TextStyle(fontSize: 14, color: AppColors.textSec)),
-            ]),
-          );
-        },
-      ),
+  Future<void> _showRewardedAd(BuildContext context, AudioProvider prov, String path) async {
+    await AnalyticsService.logRewardedAdShown();
+    bool rewarded = false;
+
+    await AdService.showRewardedAd(
+      onRewarded: () {
+        rewarded = true;
+      },
     );
-    await Future.delayed(const Duration(seconds: 5));
-    if (!mounted) return;
-    await prov.recordExport();
-    await SharePlus.instance.share(
-      ShareParams(files: [XFile(path)], text: 'NoiseClear processed audio'),
-    );
+
+    if (rewarded) {
+      await AnalyticsService.logRewardedAdCompleted();
+      await AnalyticsService.logBonusExportEarned();
+      await prov.useDailyBonus();
+      if (mounted) await _showExportFormatDialog(context, prov, path);
+    } else {
+      await AnalyticsService.logRewardedAdSkipped();
+    }
   }
 
-  void _showUpgradeDialog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.bg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('NoiseClear Pro',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _ProBenefit(icon: Icons.all_inclusive_rounded, text: 'Unlimited exports'),
-          _ProBenefit(icon: Icons.block_rounded,         text: 'Zero ads'),
-          _ProBenefit(icon: Icons.tune_rounded,          text: 'All 6 presets + advanced controls'),
-          _ProBenefit(icon: Icons.music_note_rounded,    text: 'Music mixing'),
-          _ProBenefit(icon: Icons.batch_prediction_rounded, text: 'Batch processing (coming soon)'),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: AppColors.textPrim,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Text('₹99 / month  —  Coming Soon',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.white)),
-          ),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: AppColors.textDim)),
-          ),
-        ],
-      ),
-    );
+  void _openPaywall(BuildContext context) {
+    AnalyticsService.logPaywallShown('export_limit');
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
   }
 }
 
@@ -641,9 +598,14 @@ class _BigBtn extends StatelessWidget {
 // ── Monetization gate bottom sheet ────────────────────────────────────────────
 
 class _ExportGateSheet extends StatelessWidget {
+  final bool canWatchAd;
   final VoidCallback onWatchAd;
   final VoidCallback onUpgrade;
-  const _ExportGateSheet({required this.onWatchAd, required this.onUpgrade});
+  const _ExportGateSheet({
+    required this.canWatchAd,
+    required this.onWatchAd,
+    required this.onUpgrade,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -664,73 +626,61 @@ class _ExportGateSheet extends StatelessWidget {
               child: const Icon(Icons.lock_open_rounded, size: 22, color: AppColors.textPrim),
             ),
             const SizedBox(width: 14),
-            const Expanded(
+            Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('10 free exports used',
+                const Text('30 free exports used',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
-                SizedBox(height: 2),
-                Text('Watch a short ad or upgrade to continue',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSec)),
+                const SizedBox(height: 2),
+                Text(
+                  canWatchAd ? 'Watch a short ad for 1 free export today' : 'Upgrade for unlimited access',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSec),
+                ),
               ]),
             ),
           ]),
           const SizedBox(height: 24),
-          GestureDetector(
-            onTap: onWatchAd,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.textPrim,
-                borderRadius: BorderRadius.circular(14),
+          if (canWatchAd) ...[
+            GestureDetector(
+              onTap: onWatchAd,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.textPrim,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.play_circle_rounded, size: 18, color: AppColors.white),
+                  SizedBox(width: 8),
+                  Text('Watch Ad  —  1 Free Export Today',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.white)),
+                ]),
               ),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.play_circle_rounded, size: 18, color: AppColors.white),
-                SizedBox(width: 8),
-                Text('Watch Ad  —  Free Export',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.white)),
-              ]),
             ),
-          ),
-          const SizedBox(height: 10),
+            const SizedBox(height: 10),
+          ],
           GestureDetector(
             onTap: onUpgrade,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: canWatchAd ? AppColors.surface : AppColors.textPrim,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.border, width: 0.5),
+                border: canWatchAd ? Border.all(color: AppColors.border, width: 0.5) : null,
               ),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.workspace_premium_rounded, size: 18, color: AppColors.textSec),
-                SizedBox(width: 8),
-                Text('Upgrade Pro  —  ₹99/month',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSec)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.workspace_premium_rounded, size: 18,
+                    color: canWatchAd ? AppColors.textSec : AppColors.white),
+                const SizedBox(width: 8),
+                Text('Upgrade Pro  —  from ₹199/month',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                        color: canWatchAd ? AppColors.textSec : AppColors.white)),
               ]),
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _ProBenefit extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _ProBenefit({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(children: [
-        Icon(icon, size: 16, color: AppColors.textPrim),
-        const SizedBox(width: 10),
-        Text(text, style: const TextStyle(fontSize: 13, color: AppColors.textSec)),
-      ]),
     );
   }
 }

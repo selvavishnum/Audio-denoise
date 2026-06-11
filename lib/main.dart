@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -7,11 +8,14 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'providers/audio_provider.dart';
+import 'providers/auth_provider.dart';
+import 'providers/subscription_provider.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/record_screen.dart';
 import 'screens/denoise_screen.dart';
 import 'screens/edit_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/ad_service.dart';
 import 'theme.dart';
 
 void main() async {
@@ -24,8 +28,20 @@ void main() async {
     systemNavigationBarIconBrightness: Brightness.dark,
   ));
   await _requestPermissions();
+
+  // Firebase — wrapped so the app still launches if google-services.json
+  // has not yet been replaced with real credentials.
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {}
+
+  // AdMob initializes asynchronously; pre-loads first rewarded ad.
+  unawaited(AdService.initialize());
+
   runApp(const NoiseClearApp());
 }
+
+void unawaited(Future<void> future) {}
 
 Future<void> _requestPermissions() async {
   final perms = <Permission>[Permission.microphone];
@@ -43,8 +59,14 @@ class NoiseClearApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AudioProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AudioProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(
+          create: (_) => SubscriptionProvider()..initialize(),
+        ),
+      ],
       child: MaterialApp(
         title: 'NoiseClear',
         debugShowCheckedModeBanner: false,
@@ -117,10 +139,10 @@ class _BottomNav extends StatelessWidget {
           height: 60,
           child: Row(
             children: [
-              _NavItem(icon: Icons.mic_none_rounded,   activeIcon: Icons.mic_rounded,        label: 'Record',   index: 0, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.graphic_eq_outlined, activeIcon: Icons.graphic_eq,        label: 'Denoise',  index: 1, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.content_cut_rounded, activeIcon: Icons.content_cut_rounded, label: 'Editor', index: 2, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.settings_outlined,  activeIcon: Icons.settings_rounded,   label: 'Settings', index: 3, current: currentIndex, onTap: onTap),
+              _NavItem(icon: Icons.mic_none_rounded,    activeIcon: Icons.mic_rounded,          label: 'Record',   index: 0, current: currentIndex, onTap: onTap),
+              _NavItem(icon: Icons.graphic_eq_outlined, activeIcon: Icons.graphic_eq,           label: 'Denoise',  index: 1, current: currentIndex, onTap: onTap),
+              _NavItem(icon: Icons.content_cut_rounded, activeIcon: Icons.content_cut_rounded,  label: 'Editor',   index: 2, current: currentIndex, onTap: onTap),
+              _NavItem(icon: Icons.settings_outlined,   activeIcon: Icons.settings_rounded,     label: 'Settings', index: 3, current: currentIndex, onTap: onTap),
             ],
           ),
         ),
