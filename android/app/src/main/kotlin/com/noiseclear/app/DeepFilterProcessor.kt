@@ -231,27 +231,27 @@ class DeepFilterProcessor(private val context: Context) {
         val h0T   = tensor(hEnc0,   longArrayOf(1, 1, ENC_HIDDEN.toLong()))
         val h1T   = tensor(hEnc1,   longArrayOf(1, 1, ENC_HIDDEN.toLong()))
 
-        // Feed inputs by position (names may vary by export version)
         val inNames = s.inputNames.toList()
-        val inputs  = linkedMapOf(
-            inNames[0] to specT as OnnxValue,
-            inNames[1] to erbT  as OnnxValue,
-            inNames[2] to h0T   as OnnxValue,
-            inNames[3] to h1T   as OnnxValue,
+        // Use OnnxTensorLike (not OnnxValue) — run() requires Map<String, out OnnxTensorLike>
+        val inputs = linkedMapOf<String, OnnxTensorLike>(
+            inNames[0] to specT,
+            inNames[1] to erbT,
+            inNames[2] to h0T,
+            inNames[3] to h1T,
         )
         val res = s.run(inputs)
         val outNames = s.outputNames.toList()
 
-        val emb = floats(res[outNames[0]] as OnnxTensor)
-        val c0  = if (outNames.size > 1) floats(res[outNames[1]] as OnnxTensor) else FloatArray(NB_DF * 2)
-        val e0  = if (outNames.size > 2) floats(res[outNames[2]] as OnnxTensor) else FloatArray(0)
-        val e1  = if (outNames.size > 3) floats(res[outNames[3]] as OnnxTensor) else FloatArray(0)
-        val e2  = if (outNames.size > 4) floats(res[outNames[4]] as OnnxTensor) else FloatArray(0)
-        val e3  = if (outNames.size > 5) floats(res[outNames[5]] as OnnxTensor) else FloatArray(0)
-        // Update hidden states (last 2 outputs)
+        // Result.get(name) returns Optional<OnnxValue> — unwrap with .get()
+        val emb = floats(res.get(outNames[0]).get() as OnnxTensor)
+        val c0  = if (outNames.size > 1) floats(res.get(outNames[1]).get() as OnnxTensor) else FloatArray(NB_DF * 2)
+        val e0  = if (outNames.size > 2) floats(res.get(outNames[2]).get() as OnnxTensor) else FloatArray(0)
+        val e1  = if (outNames.size > 3) floats(res.get(outNames[3]).get() as OnnxTensor) else FloatArray(0)
+        val e2  = if (outNames.size > 4) floats(res.get(outNames[4]).get() as OnnxTensor) else FloatArray(0)
+        val e3  = if (outNames.size > 5) floats(res.get(outNames[5]).get() as OnnxTensor) else FloatArray(0)
         val n = outNames.size
-        if (n >= 2) hEnc0 = floats(res[outNames[n - 2]] as OnnxTensor)
-        if (n >= 1) hEnc1 = floats(res[outNames[n - 1]] as OnnxTensor)
+        if (n >= 2) hEnc0 = floats(res.get(outNames[n - 2]).get() as OnnxTensor)
+        if (n >= 1) hEnc1 = floats(res.get(outNames[n - 1]).get() as OnnxTensor)
 
         res.close()
         listOf(specT, erbT, h0T, h1T).forEach { it.close() }
@@ -274,17 +274,17 @@ class DeepFilterProcessor(private val context: Context) {
             add(tensor(hErb0, longArrayOf(1, 1, DEC_HIDDEN.toLong())))
             add(tensor(hErb1, longArrayOf(1, 1, DEC_HIDDEN.toLong())))
         }
-        val inputs = inNames.zip(tensors).take(tensors.size)
-            .associate { (k, v) -> k to (v as OnnxValue) }
+        val inputs: Map<String, OnnxTensorLike> = inNames.zip(tensors).take(tensors.size)
+            .associate { (k, v) -> k to v }
 
         val res = s.run(inputs)
         val outNames = s.outputNames.toList()
-        val gains = floats(res[outNames[0]] as OnnxTensor)
+        val gains = floats(res.get(outNames[0]).get() as OnnxTensor)
         val n = outNames.size
-        if (n >= 2) hErb0 = floats(res[outNames[n - 2]] as OnnxTensor)
-        if (n >= 1) hErb1 = floats(res[outNames[n - 1]] as OnnxTensor)
+        if (n >= 2) hErb0 = floats(res.get(outNames[n - 2]).get() as OnnxTensor)
+        if (n >= 1) hErb1 = floats(res.get(outNames[n - 1]).get() as OnnxTensor)
 
-        res.close(); tensors.forEach { (it as OnnxTensor).close() }
+        res.close(); tensors.forEach { it.close() }
         return gains.copyOf(NB_ERB)
     }
 
@@ -298,15 +298,15 @@ class DeepFilterProcessor(private val context: Context) {
         val h1T   = tensor(hDf1, longArrayOf(1, 1, DEC_HIDDEN.toLong()))
 
         val allT  = listOf(embT, c0T, h0T, h1T)
-        val inputs = inNames.zip(allT).take(minOf(inNames.size, allT.size))
-            .associate { (k, v) -> k to (v as OnnxValue) }
+        val inputs: Map<String, OnnxTensorLike> = inNames.zip(allT).take(minOf(inNames.size, allT.size))
+            .associate { (k, v) -> k to v }
 
         val res = s.run(inputs)
         val outNames = s.outputNames.toList()
-        val coefs = floats(res[outNames[0]] as OnnxTensor)
+        val coefs = floats(res.get(outNames[0]).get() as OnnxTensor)
         val n = outNames.size
-        if (n >= 2) hDf0 = floats(res[outNames[n - 2]] as OnnxTensor)
-        if (n >= 1) hDf1 = floats(res[outNames[n - 1]] as OnnxTensor)
+        if (n >= 2) hDf0 = floats(res.get(outNames[n - 2]).get() as OnnxTensor)
+        if (n >= 1) hDf1 = floats(res.get(outNames[n - 1]).get() as OnnxTensor)
 
         res.close(); allT.forEach { it.close() }
         return coefs
