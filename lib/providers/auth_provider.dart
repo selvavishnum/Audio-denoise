@@ -5,11 +5,14 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../services/analytics_service.dart';
 
 class AuthProvider extends ChangeNotifier {
+  static const _adminEmail = 'selvavishnu.m@gmail.com';
+
   final _auth = FirebaseAuth.instance;
   final _googleSignIn = GoogleSignIn();
 
   User? get user => _auth.currentUser;
   bool get isLoggedIn => user != null;
+  bool get isAdmin => email == _adminEmail;
   String get displayName => user?.displayName ?? '';
   String get email => user?.email ?? '';
   String? get photoUrl => user?.photoURL;
