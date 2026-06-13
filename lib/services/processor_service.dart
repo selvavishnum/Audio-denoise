@@ -15,15 +15,14 @@ class ProcessorService {
     AudioParams params, {
     void Function(double)? onProgress,
   }) async {
-    // ── Stage 0: Neural denoising (0 → 25% of progress bar) ─────────────────
-    // Preference: DeepFilterNet2 (ONNX, 48 kHz) → TFLite SpectralUNet → DSP only.
-    AudioData stageInput = input;
+    // ── Neural denoising (DeepFilterNet2 ONNX preferred, TFLite fallback) ──────
+    // When neural succeeds → return immediately, skip DSP entirely.
+    // DSP chain only runs when no neural model is available.
     final bool useDeepFilter = DeepFilterService.isReady;
     final bool useTflite     = !useDeepFilter && NeuralProcessorService.isReady;
-    final bool useNeural     = useDeepFilter || useTflite;
 
-    if (useNeural) {
-      onProgress?.call(0.01);
+    if (useDeepFilter || useTflite) {
+      onProgress?.call(0.05);
       Float32List? cleaned;
       if (useDeepFilter) {
         cleaned = await DeepFilterService.denoise(input.samples, input.sampleRate);
@@ -31,27 +30,26 @@ class ProcessorService {
         cleaned = await NeuralProcessorService.denoise(input.samples, input.sampleRate);
       }
       if (cleaned != null) {
-        stageInput = AudioData.fromSamples(cleaned, input.sampleRate);
+        onProgress?.call(1.0);
+        return AudioData.fromSamples(cleaned, input.sampleRate);
       }
-      onProgress?.call(0.25);
+      // Neural failed silently → fall through to DSP
+      onProgress?.call(0.1);
     }
 
-    // ── Stage 1: DSP refinement (25 → 100%, or 0 → 100% without neural) ─────
-    final double progressOffset = useNeural ? 0.25 : 0.0;
-    final double progressScale  = useNeural ? 0.75 : 1.0;
-
+    // ── DSP fallback (runs only when neural model not loaded / failed) ─────────
     final receivePort = ReceivePort();
     await Isolate.spawn(_processIsolate, {
       'sendPort':       receivePort.sendPort,
-      'samples':        stageInput.samples,
-      'rate':           stageInput.sampleRate,
+      'samples':        input.samples,
+      'rate':           input.sampleRate,
       'params':         params.toMap(),
-      'progressOffset': progressOffset,
-      'progressScale':  progressScale,
+      'progressOffset': 0.0,
+      'progressScale':  1.0,
     });
 
     Float32List? result;
-    int resultRate = stageInput.sampleRate;
+    int resultRate = input.sampleRate;
 
     await for (final msg in receivePort) {
       if (msg is double) {
@@ -64,7 +62,7 @@ class ProcessorService {
     }
     receivePort.close();
 
-    return AudioData.fromSamples(result ?? stageInput.samples, resultRate);
+    return AudioData.fromSamples(result ?? input.samples, resultRate);
   }
 
   // ─── Isolate entry ─────────────────────────────────────────────────────
