@@ -5,7 +5,10 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../services/analytics_service.dart';
 
 class AuthProvider extends ChangeNotifier {
-  static const _adminEmail = 'selvavishnu.m@gmail.com';
+  static const _adminEmail = String.fromEnvironment(
+    'ADMIN_EMAIL',
+    defaultValue: 'selvavishnu.m@gmail.com',
+  );
 
   final _auth = FirebaseAuth.instance;
   // serverClientId (web client type-3) is required for Android to generate

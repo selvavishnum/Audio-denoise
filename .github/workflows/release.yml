@@ -96,7 +96,8 @@ jobs:
         run: |
           flutter build apk --release \
             --build-name="${{ steps.ver.outputs.name }}" \
-            --build-number="${{ steps.ver.outputs.code }}"
+            --build-number="${{ steps.ver.outputs.code }}" \
+            --dart-define="ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL || 'selvavishnu.m@gmail.com' }}"
 
       # ── Rename APK ────────────────────────────────────────────────────
       - name: Rename APK
