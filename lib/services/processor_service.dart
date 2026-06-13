@@ -21,16 +21,20 @@ class ProcessorService {
   static bool lastUsedNeural = false;
 
   /// [premium] selects the high-strength Voice Isolator pass (Pro/admin only).
+  /// [deepFilterEnabled] — allow DeepFilterNet3 ONNX when models are present.
+  /// [mmseEnabled]       — allow MMSE-STSA when neural is unavailable/disabled.
   static Future<AudioData> process(
     AudioData input,
     AudioParams params, {
     void Function(double)? onProgress,
     bool premium = false,
+    bool deepFilterEnabled = true,
+    bool mmseEnabled = true,
   }) async {
     onProgress?.call(0.05);
 
-    // ── Primary: DeepFilterNet3 (studio-grade neural enhancement) ───────────
-    if (DeepFilterService.isReady) {
+    // ── Primary: DeepFilterNet3 ONNX neural engine ───────────────────────────
+    if (deepFilterEnabled && DeepFilterService.isReady) {
       final cleaned = await DeepFilterService.denoise(
         input.samples,
         input.sampleRate,
@@ -43,12 +47,19 @@ class ProcessorService {
       }
     }
 
-    // ── Safety fallback: on-device MMSE-STSA (only when models are absent) ──
+    // ── Fallback / DSP: MMSE-STSA spectral suppression ───────────────────────
+    if (mmseEnabled) {
+      lastUsedNeural = false;
+      final fallback = await NeuralProcessorService.denoise(
+          input.samples, input.sampleRate);
+      onProgress?.call(1.0);
+      return AudioData.fromSamples(fallback ?? input.samples, input.sampleRate);
+    }
+
+    // ── All engines disabled: return original unmodified ─────────────────────
     lastUsedNeural = false;
-    final fallback = await NeuralProcessorService.denoise(
-        input.samples, input.sampleRate);
     onProgress?.call(1.0);
-    return AudioData.fromSamples(fallback ?? input.samples, input.sampleRate);
+    return input;
   }
 
   // ─── WAV Decode ────────────────────────────────────────────────────────

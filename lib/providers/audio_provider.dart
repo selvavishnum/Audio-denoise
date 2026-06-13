@@ -31,7 +31,12 @@ class AudioProvider extends ChangeNotifier {
   // ── HD Mode ───────────────────────────────────────────────────────────
   bool hdModeEnabled = false;
 
-  // ── Processing feature toggles ────────────────────────────────────────
+  // ── AI Engine toggles ─────────────────────────────────────────────────
+  bool deepFilterEnabled = true;  // DeepFilterNet3 ONNX neural engine
+  bool mmseEnabled       = true;  // MMSE-STSA spectral suppression
+  bool dspEnabled        = false; // Force DSP-only mode (skips neural)
+
+  // ── DSP feature toggles ───────────────────────────────────────────────
   bool noiseReductionEnabled = true;
   bool compressionEnabled    = true;
   bool vadEnabled            = true;
@@ -87,6 +92,9 @@ class AudioProvider extends ChangeNotifier {
     _exportCount           = prefs.getInt('exportCount') ?? 0;
     hdModeEnabled          = prefs.getBool('hdMode') ?? false;
     _lastBonusDate         = prefs.getString('lastBonusDate');
+    deepFilterEnabled      = prefs.getBool('deepFilterEnabled') ?? true;
+    mmseEnabled            = prefs.getBool('mmseEnabled')       ?? true;
+    dspEnabled             = prefs.getBool('dspEnabled')        ?? false;
     noiseReductionEnabled  = prefs.getBool('nrEnabled')   ?? true;
     compressionEnabled     = prefs.getBool('compEnabled') ?? true;
     vadEnabled             = prefs.getBool('vadEnabled')  ?? true;
@@ -123,6 +131,27 @@ class AudioProvider extends ChangeNotifier {
     hdModeEnabled = !hdModeEnabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hdMode', hdModeEnabled);
+    notifyListeners();
+  }
+
+  Future<void> toggleDeepFilter() async {
+    deepFilterEnabled = !deepFilterEnabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('deepFilterEnabled', deepFilterEnabled);
+    notifyListeners();
+  }
+
+  Future<void> toggleMmse() async {
+    mmseEnabled = !mmseEnabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('mmseEnabled', mmseEnabled);
+    notifyListeners();
+  }
+
+  Future<void> toggleDsp() async {
+    dspEnabled = !dspEnabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('dspEnabled', dspEnabled);
     notifyListeners();
   }
 
@@ -249,6 +278,8 @@ class AudioProvider extends ChangeNotifier {
       processedAudio = await ProcessorService.process(
         inputForDsp, params,
         premium: premium,
+        deepFilterEnabled: deepFilterEnabled && !dspEnabled,
+        mmseEnabled: mmseEnabled || dspEnabled,
         onProgress: (p) {
           progress = hdModeEnabled ? 0.05 + p * 0.95 : p;
           notifyListeners();
