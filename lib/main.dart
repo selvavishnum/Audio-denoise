@@ -18,7 +18,6 @@ import 'screens/edit_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/ad_service.dart';
 import 'services/deepfilter_service.dart';
-import 'services/neural_processor_service.dart';
 import 'theme.dart';
 
 void main() async {
@@ -41,10 +40,8 @@ void main() async {
   // AdMob initializes asynchronously; pre-loads first rewarded ad.
   unawaited(AdService.initialize());
 
-  // DeepFilterNet2 (ONNX) — preferred neural denoiser; initialises async.
-  // Falls back to TFLite SpectralUNet, then DSP-only, if ONNX models absent.
+  // DeepFilterNet2 (ONNX) — neural denoiser; falls back to DSP if models absent.
   unawaited(DeepFilterService.initialize());
-  unawaited(NeuralProcessorService.initialize());
 
   runApp(const NoiseClearApp());
 }

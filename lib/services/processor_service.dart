@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import '../models/audio_params.dart';
 import 'deepfilter_service.dart';
 import 'fft_service.dart';
-import 'neural_processor_service.dart';
 
 // ─── Public entry point ────────────────────────────────────────────────────
 
@@ -18,17 +17,10 @@ class ProcessorService {
     // ── Neural denoising (DeepFilterNet2 ONNX preferred, TFLite fallback) ──────
     // When neural succeeds → return immediately, skip DSP entirely.
     // DSP chain only runs when no neural model is available.
-    final bool useDeepFilter = DeepFilterService.isReady;
-    final bool useTflite     = !useDeepFilter && NeuralProcessorService.isReady;
-
-    if (useDeepFilter || useTflite) {
+    if (DeepFilterService.isReady) {
       onProgress?.call(0.05);
       Float32List? cleaned;
-      if (useDeepFilter) {
-        cleaned = await DeepFilterService.denoise(input.samples, input.sampleRate);
-      } else {
-        cleaned = await NeuralProcessorService.denoise(input.samples, input.sampleRate);
-      }
+      cleaned = await DeepFilterService.denoise(input.samples, input.sampleRate);
       if (cleaned != null) {
         onProgress?.call(1.0);
         return AudioData.fromSamples(cleaned, input.sampleRate);
