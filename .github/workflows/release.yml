@@ -76,20 +76,24 @@ jobs:
       # If secrets are absent the APK is signed with the debug key (fine
       # for sideloading and internal testing, NOT for Play Store).
       - name: Set up production signing
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           STORE_PASSWORD:  ${{ secrets.STORE_PASSWORD }}
           KEY_ALIAS:       ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD:    ${{ secrets.KEY_PASSWORD }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/keystore.jks
-          cat > android/key.properties <<EOF
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/keystore.jks
+            cat > android/key.properties <<EOF
           storeFile=../keystore.jks
           storePassword=$STORE_PASSWORD
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
           EOF
+            echo "Production signing configured."
+          else
+            echo "No KEYSTORE_BASE64 secret — APK will use debug signing."
+          fi
 
       # ── Build ─────────────────────────────────────────────────────────
       - name: Build release APK
