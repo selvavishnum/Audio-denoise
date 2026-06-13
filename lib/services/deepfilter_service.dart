@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/services.dart';
 
 class DeepFilterService {
-  static const _channel = MethodChannel('com.selvavishnu.clearwave/audio');
+  static const _channel = MethodChannel('com.noiseclear.app/audio');
 
   static bool _ready = false;
   static bool get isReady => _ready;

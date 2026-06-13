@@ -9,7 +9,7 @@ import '../services/processor_service.dart';
 
 export '../models/audio_params.dart';
 
-const _channel = MethodChannel('com.selvavishnu.clearwave/video');
+const _channel = MethodChannel('com.noiseclear.app/video');
 const _uuid    = Uuid();
 
 class VideoProcessorService {

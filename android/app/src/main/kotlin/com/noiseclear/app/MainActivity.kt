@@ -1,4 +1,4 @@
-package com.selvavishnu.clearwave
+package com.noiseclear.app
 
 import android.os.Handler
 import android.os.Looper
@@ -11,8 +11,8 @@ import java.nio.ByteOrder
 class MainActivity : FlutterActivity() {
 
     companion object {
-        private const val VIDEO_CHANNEL = "com.selvavishnu.clearwave/video"
-        private const val AUDIO_CHANNEL = "com.selvavishnu.clearwave/audio"
+        private const val VIDEO_CHANNEL = "com.noiseclear.app/video"
+        private const val AUDIO_CHANNEL = "com.noiseclear.app/audio"
     }
 
     private val videoProcessor = VideoAudioProcessor()

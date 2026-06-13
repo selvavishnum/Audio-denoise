@@ -26,7 +26,7 @@ def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '
 def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
 
 android {
-    namespace 'com.selvavishnu.clearwave'
+    namespace 'com.noiseclear.app'
     compileSdk 36
     ndkVersion "28.2.13676358"
 
@@ -44,7 +44,7 @@ android {
     }
 
     defaultConfig {
-        applicationId 'com.selvavishnu.clearwave'
+        applicationId 'com.noiseclear.app'
         minSdk 24
         targetSdk 35
         versionCode flutterVersionCode.toInteger()

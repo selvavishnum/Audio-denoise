@@ -1,4 +1,4 @@
-package com.selvavishnu.clearwave
+package com.noiseclear.app
 
 import ai.onnxruntime.*
 import android.content.Context
