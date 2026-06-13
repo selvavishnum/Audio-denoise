@@ -15,9 +15,10 @@ class MainActivity : FlutterActivity() {
         private const val AUDIO_CHANNEL = "com.noiseclear.app/audio"
     }
 
-    private val videoProcessor = VideoAudioProcessor()
-    private val deepFilter     = DeepFilterProcessor(this)
-    private val handler        = Handler(Looper.getMainLooper())
+    private val videoProcessor   = VideoAudioProcessor()
+    private val deepFilter       = DeepFilterProcessor(this)
+    private val neuralProcessor  = NeuralNoiseProcessor()
+    private val handler          = Handler(Looper.getMainLooper())
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -27,7 +28,7 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "extractAudioToWav" -> {
-                        val videoPath  = call.argument<String>("videoPath")  ?: run { result.error("ARG", "videoPath missing", null);  return@setMethodCallHandler }
+                        val videoPath  = call.argument<String>("videoPath")  ?: run { result.error("ARG", "videoPath missing",  null); return@setMethodCallHandler }
                         val outputPath = call.argument<String>("outputPath") ?: run { result.error("ARG", "outputPath missing", null); return@setMethodCallHandler }
                         Thread {
                             val ok = videoProcessor.extractAudioToWav(videoPath, outputPath)
@@ -35,8 +36,8 @@ class MainActivity : FlutterActivity() {
                         }.start()
                     }
                     "muxProcessedAudioIntoVideo" -> {
-                        val videoPath  = call.argument<String>("videoPath")  ?: run { result.error("ARG", "videoPath missing", null);  return@setMethodCallHandler }
-                        val wavPath    = call.argument<String>("wavPath")    ?: run { result.error("ARG", "wavPath missing", null);    return@setMethodCallHandler }
+                        val videoPath  = call.argument<String>("videoPath")  ?: run { result.error("ARG", "videoPath missing",  null); return@setMethodCallHandler }
+                        val wavPath    = call.argument<String>("wavPath")    ?: run { result.error("ARG", "wavPath missing",    null); return@setMethodCallHandler }
                         val outputPath = call.argument<String>("outputPath") ?: run { result.error("ARG", "outputPath missing", null); return@setMethodCallHandler }
                         Thread {
                             val ok = videoProcessor.muxProcessedAudioIntoVideo(videoPath, wavPath, outputPath)
@@ -47,10 +48,12 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        // ── Audio / DeepFilter channel ─────────────────────────────────────
+        // ── Audio / AI neural channel ──────────────────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AUDIO_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+
+                    // ── DeepFilterNet3 ONNX init ──────────────────────────
                     "initDeepFilter" -> {
                         Thread {
                             val ok = deepFilter.initialize()
@@ -58,28 +61,56 @@ class MainActivity : FlutterActivity() {
                         }.start()
                     }
                     "deepFilter" -> {
-                        val pcmBytes = call.argument<ByteArray>("pcm")  ?: run { result.error("ARG", "pcm missing", null);  return@setMethodCallHandler }
-                        val rate     = call.argument<Int>("rate")        ?: run { result.error("ARG", "rate missing", null); return@setMethodCallHandler }
-                        val isolator = call.argument<Boolean>("isolator") ?: false
-
-                        // Deserialise Float32List bytes → FloatArray
-                        val buf = ByteBuffer.wrap(pcmBytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
-                        val input = FloatArray(buf.remaining()).also { buf.get(it) }
-
+                        val pcmBytes = call.argument<ByteArray>("pcm")      ?: run { result.error("ARG", "pcm missing",  null); return@setMethodCallHandler }
+                        val rate     = call.argument<Int>("rate")            ?: run { result.error("ARG", "rate missing", null); return@setMethodCallHandler }
+                        val isolator = call.argument<Boolean>("isolator")    ?: false
+                        val input    = pcmBytes.toFloatArray()
                         Thread {
                             try {
                                 val enhanced = deepFilter.process(input, rate, isolator)
-                                // Serialise FloatArray → bytes
-                                val outBuf = ByteBuffer.allocate(enhanced.size * 4).order(ByteOrder.LITTLE_ENDIAN)
-                                enhanced.forEach { outBuf.putFloat(it) }
-                                handler.post { result.success(outBuf.array()) }
+                                handler.post { result.success(enhanced.toByteArray()) }
                             } catch (e: Exception) {
                                 handler.post { result.error("DF", e.message, null) }
                             }
                         }.start()
                     }
+
+                    // ── Built-in neural processor (no model files needed) ─
+                    "initNeuralProcessor" -> {
+                        Thread {
+                            val ok = neuralProcessor.initialize()
+                            handler.post { result.success(ok) }
+                        }.start()
+                    }
+                    "neuralDenoise" -> {
+                        val pcmBytes = call.argument<ByteArray>("pcm")      ?: run { result.error("ARG", "pcm missing",  null); return@setMethodCallHandler }
+                        val rate     = call.argument<Int>("rate")            ?: run { result.error("ARG", "rate missing", null); return@setMethodCallHandler }
+                        val input    = pcmBytes.toFloatArray()
+                        Thread {
+                            try {
+                                val enhanced = neuralProcessor.process(input, rate)
+                                handler.post { result.success(enhanced.toByteArray()) }
+                            } catch (e: Exception) {
+                                handler.post { result.error("NP", e.message, null) }
+                            }
+                        }.start()
+                    }
+
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // ── PCM byte helpers ──────────────────────────────────────────────────────
+
+    private fun ByteArray.toFloatArray(): FloatArray {
+        val buf = ByteBuffer.wrap(this).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+        return FloatArray(buf.remaining()).also { buf.get(it) }
+    }
+
+    private fun FloatArray.toByteArray(): ByteArray {
+        val buf = ByteBuffer.allocate(size * 4).order(ByteOrder.LITTLE_ENDIAN)
+        forEach { buf.putFloat(it) }
+        return buf.array()
     }
 }
