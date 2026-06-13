@@ -17,7 +17,11 @@ class DeepFilterService {
   }
 
   /// Returns enhanced PCM as Float32List, or null on failure.
-  static Future<Float32List?> denoise(Float32List samples, int sampleRate) async {
+  ///
+  /// [isolator] enables the premium Voice Isolator mode — a second, more
+  /// aggressive neural refinement pass for maximum voice isolation.
+  static Future<Float32List?> denoise(
+      Float32List samples, int sampleRate, {bool isolator = false}) async {
     if (!_ready) return null;
     try {
       // Pack Float32List into bytes (little-endian IEEE-754)
@@ -25,8 +29,9 @@ class DeepFilterService {
         samples.offsetInBytes, samples.lengthInBytes,
       );
       final result = await _channel.invokeMethod<Uint8List>('deepFilter', {
-        'pcm':  inputBytes,
-        'rate': sampleRate,
+        'pcm':      inputBytes,
+        'rate':     sampleRate,
+        'isolator': isolator,
       });
       if (result == null) return null;
       // Unpack result bytes back to Float32List

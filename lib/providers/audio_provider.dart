@@ -227,7 +227,8 @@ class AudioProvider extends ChangeNotifier {
 
   // ── Processing ────────────────────────────────────────────────────────
 
-  Future<void> processAudio() async {
+  /// [premium] enables the Voice Isolator pass (Pro / admin users only).
+  Future<void> processAudio({bool premium = false}) async {
     if (originalAudio == null) return;
     isProcessing = true;
     progress     = 0;
@@ -247,6 +248,7 @@ class AudioProvider extends ChangeNotifier {
 
       processedAudio = await ProcessorService.process(
         inputForDsp, params,
+        premium: premium,
         onProgress: (p) {
           progress = hdModeEnabled ? 0.05 + p * 0.95 : p;
           notifyListeners();

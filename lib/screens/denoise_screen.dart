@@ -266,6 +266,7 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   );
 
   Widget _bottomBar(BuildContext context, AudioProvider prov) {
+    final isPro = context.watch<SubscriptionProvider>().isPro;
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       decoration: const BoxDecoration(
@@ -276,10 +277,12 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
         children: [
           Expanded(
             child: _BigBtn(
-              label:   prov.isProcessing ? 'Processing…' : 'Process',
+              label:   prov.isProcessing
+                  ? 'Processing…'
+                  : (isPro ? 'Isolate Voice' : 'Process'),
               icon:    prov.isProcessing ? Icons.hourglass_empty_rounded : Icons.auto_fix_high_rounded,
               filled:  true,
-              onTap:   prov.isProcessing ? null : () => prov.processAudio(),
+              onTap:   prov.isProcessing ? null : () => prov.processAudio(premium: isPro),
               child:   prov.isProcessing
                   ? const SizedBox(width: 18, height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white))
