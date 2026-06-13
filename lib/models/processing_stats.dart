@@ -6,18 +6,22 @@ class ProcessingStats {
   final double noiseReductionPct;
   final Duration processingTime;
   final String qualityGrade;
+  // 'Neural AI' when DeepFilterNet3 ran; 'DSP Mode' when MMSE fallback ran.
+  final bool usedNeural;
 
   const ProcessingStats({
     required this.noiseReductionPct,
     required this.processingTime,
     required this.qualityGrade,
+    required this.usedNeural,
   });
 
   static ProcessingStats compute(
     Float32List inputSamples,
     Float32List outputSamples,
-    Duration elapsed,
-  ) {
+    Duration elapsed, {
+    bool usedNeural = false,
+  }) {
     const frameSize = 882; // 20 ms at 44 100 Hz
 
     List<double> rmsFrames(Float32List s) {
@@ -35,7 +39,8 @@ class ProcessingStats {
 
     if (inF.isEmpty || outF.isEmpty) {
       return ProcessingStats(
-          noiseReductionPct: 0, processingTime: elapsed, qualityGrade: 'Good');
+          noiseReductionPct: 0, processingTime: elapsed,
+          qualityGrade: 'Good', usedNeural: usedNeural);
     }
 
     final n = max(1, (inF.length  * 0.25).round());
@@ -51,6 +56,7 @@ class ProcessingStats {
       noiseReductionPct: pct,
       processingTime: elapsed,
       qualityGrade: _grade(pct),
+      usedNeural: usedNeural,
     );
   }
 

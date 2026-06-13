@@ -717,9 +717,11 @@ class _StatsCard extends StatelessWidget {
         )),
         Container(width: 0.5, height: 32, color: AppColors.border),
         Expanded(child: _Stat(
-          label: 'Processed In',
-          value: '${stats.processingTime.inSeconds}s',
-          color: AppColors.amber,
+          label: stats.usedNeural ? 'Neural AI' : 'DSP Mode',
+          value: stats.processingTime.inSeconds >= 1
+              ? '${stats.processingTime.inSeconds}s'
+              : '${stats.processingTime.inMilliseconds}ms',
+          color: stats.usedNeural ? AppColors.violet : AppColors.amber,
         )),
       ]),
     );

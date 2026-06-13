@@ -17,6 +17,9 @@ import 'neural_processor_service.dart';
 // wins and the fallback is never reached.
 
 class ProcessorService {
+  /// True if the last process() call used DeepFilterNet3; false = MMSE fallback.
+  static bool lastUsedNeural = false;
+
   /// [premium] selects the high-strength Voice Isolator pass (Pro/admin only).
   static Future<AudioData> process(
     AudioData input,
@@ -34,12 +37,14 @@ class ProcessorService {
         isolator: premium,
       );
       if (cleaned != null) {
+        lastUsedNeural = true;
         onProgress?.call(1.0);
         return AudioData.fromSamples(cleaned, input.sampleRate);
       }
     }
 
     // ── Safety fallback: on-device MMSE-STSA (only when models are absent) ──
+    lastUsedNeural = false;
     final fallback = await NeuralProcessorService.denoise(
         input.samples, input.sampleRate);
     onProgress?.call(1.0);
