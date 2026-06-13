@@ -60,6 +60,7 @@ class MainActivity : FlutterActivity() {
                     "deepFilter" -> {
                         val pcmBytes = call.argument<ByteArray>("pcm")  ?: run { result.error("ARG", "pcm missing", null);  return@setMethodCallHandler }
                         val rate     = call.argument<Int>("rate")        ?: run { result.error("ARG", "rate missing", null); return@setMethodCallHandler }
+                        val isolator = call.argument<Boolean>("isolator") ?: false
 
                         // Deserialise Float32List bytes → FloatArray
                         val buf = ByteBuffer.wrap(pcmBytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
@@ -67,7 +68,7 @@ class MainActivity : FlutterActivity() {
 
                         Thread {
                             try {
-                                val enhanced = deepFilter.process(input, rate)
+                                val enhanced = deepFilter.process(input, rate, isolator)
                                 // Serialise FloatArray → bytes
                                 val outBuf = ByteBuffer.allocate(enhanced.size * 4).order(ByteOrder.LITTLE_ENDIAN)
                                 enhanced.forEach { outBuf.putFloat(it) }

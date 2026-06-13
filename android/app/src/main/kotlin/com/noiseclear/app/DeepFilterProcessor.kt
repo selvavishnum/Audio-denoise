@@ -130,9 +130,22 @@ class DeepFilterProcessor(private val context: Context) {
 
     /**
      * Denoise [inputPcm] at [inputRate] Hz mono.
+     *
+     * [isolator] = premium Voice Isolator mode: runs a second neural refinement
+     * pass over the first pass output for maximum voice isolation (≈ studio
+     * "isolate voice" quality). Free tier uses a single pass.
+     *
      * Returns enhanced audio at the same sample rate.
      */
-    fun process(inputPcm: FloatArray, inputRate: Int): FloatArray {
+    fun process(inputPcm: FloatArray, inputRate: Int, isolator: Boolean = false): FloatArray {
+        val first = runPipeline(inputPcm, inputRate)
+        if (!isolator) return first
+        // Premium: second aggressive pass on a clean GRU state.
+        resetState()
+        return runPipeline(first, inputRate)
+    }
+
+    private fun runPipeline(inputPcm: FloatArray, inputRate: Int): FloatArray {
         val wav48 = if (inputRate == SR) inputPcm else resample(inputPcm, inputRate, SR)
         val out   = FloatArray(wav48.size)
         var outPos = 0

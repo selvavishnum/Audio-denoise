@@ -18,6 +18,10 @@ Float32List? _runDenoise(_DenoiseArgs args) =>
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// SAFETY FALLBACK ONLY — used when the DeepFilterNet3 .onnx model files are
+/// not yet bundled in assets/models/. Once the neural weights are present,
+/// DeepFilterNet always runs and this code is never reached.
+///
 /// Two-pass MMSE-STSA speech enhancer (Log-MMSE, Ephraim & Malah 1985).
 ///
 /// Pass 1 — Spectral noise profiling: estimate noise PSD from the lowest-energy
