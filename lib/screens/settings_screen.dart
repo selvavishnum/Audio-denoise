@@ -6,6 +6,7 @@ import '../models/processing_stats.dart';
 import '../providers/audio_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/subscription_provider.dart';
+import '../services/deepfilter_service.dart';
 import '../theme.dart';
 import 'paywall_screen.dart';
 
@@ -28,7 +29,8 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 32),
             _section(context, 'Account', _accountSection(context, auth, sub)),
             _section(context, 'Default Preset', _presetSelector(context)),
-            _section(context, 'Processing', _processingToggles(context, prov)),
+            _section(context, 'AI Engine', _engineToggles(context, prov)),
+            _section(context, 'DSP Effects', _processingToggles(context, prov)),
             _section(context, 'About', _about(context)),
             if (prov.recentFiles.isNotEmpty)
               _section(context, 'Recent Files', _historyList(prov)),
@@ -273,13 +275,60 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  Widget _engineToggles(BuildContext context, AudioProvider prov) {
+    final modelReady = DeepFilterService.isReady;
+    return Column(
+      children: [
+        _SettingsRow(
+          icon: Icons.auto_awesome_rounded,
+          title: 'Neural AI (DeepFilterNet3)',
+          subtitle: modelReady
+              ? 'ONNX neural model · Studio-grade quality'
+              : 'ONNX model files not found — add to assets/models/',
+          trailing: Switch(
+            value: prov.deepFilterEnabled,
+            onChanged: modelReady
+                ? (_) => context.read<AudioProvider>().toggleDeepFilter()
+                : null,
+            activeColor: AppColors.textPrim,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        _divider(),
+        _SettingsRow(
+          icon: Icons.waves_rounded,
+          title: 'MMSE-STSA',
+          subtitle: 'Spectral suppression · Always available · Fast',
+          trailing: Switch(
+            value: prov.mmseEnabled,
+            onChanged: (_) => context.read<AudioProvider>().toggleMmse(),
+            activeColor: AppColors.textPrim,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        _divider(),
+        _SettingsRow(
+          icon: Icons.graphic_eq_rounded,
+          title: 'DSP Mode',
+          subtitle: 'Force spectral DSP · Skips neural, uses MMSE filter',
+          trailing: Switch(
+            value: prov.dspEnabled,
+            onChanged: (_) => context.read<AudioProvider>().toggleDsp(),
+            activeColor: AppColors.textPrim,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _processingToggles(BuildContext context, AudioProvider prov) {
     return Column(
       children: [
         _SettingsRow(
-          icon: Icons.graphic_eq_rounded,
+          icon: Icons.noise_control_off_rounded,
           title: 'Noise Reduction',
-          subtitle: 'MMSE Wiener filter with spectral gating',
+          subtitle: 'Apply spectral gating after engine processing',
           trailing: Switch(
             value: prov.noiseReductionEnabled,
             onChanged: (_) => context.read<AudioProvider>().toggleNoiseReduction(),
