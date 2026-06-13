@@ -105,7 +105,7 @@ class DeepFilterProcessor(private val context: Context) {
         analysisBuf.fill(0f); synthBuf.fill(0f)
     }
 
-    /** Copies Flutter assets/models/*.onnx → app cacheDir/deepfilter/ */
+    /** Copies the three ONNX model assets into app cacheDir/deepfilter/ */
     private fun extractModels(): String? {
         val dir = File(context.cacheDir, "deepfilter")
         dir.mkdirs()
