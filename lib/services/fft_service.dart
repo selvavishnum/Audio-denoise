@@ -56,7 +56,7 @@ class FFTService {
   // In-place IFFT via conjugate trick.
   static void ifft(Float64List re, Float64List im) {
     final int n = re.length;
-    for (int i = 0; i < n; i++) im[i] = -im[i];
+    for (int i = 0; i < n; i++) { im[i] = -im[i]; }
     fft(re, im);
     for (int i = 0; i < n; i++) {
       re[i] /= n;
@@ -74,7 +74,7 @@ class FFTService {
   // Nearest power-of-2 >= n
   static int nextPow2(int n) {
     int p = 1;
-    while (p < n) p <<= 1;
+    while (p < n) { p <<= 1; }
     return p;
   }
 }

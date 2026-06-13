@@ -89,10 +89,10 @@ class NeuralProcessorService {
         }
       }
       var mean = 0.0;
-      for (final v in logMag) mean += v;
+      for (final v in logMag) { mean += v; }
       mean /= logMag.length;
       var variance = 0.0;
-      for (final v in logMag) variance += (v - mean) * (v - mean);
+      for (final v in logMag) { variance += (v - mean) * (v - mean); }
       final std = sqrt(variance / logMag.length) + 1e-8;
 
       final normMag = Float32List(logMag.length);
@@ -121,7 +121,9 @@ class NeuralProcessorService {
           }
         }
 
-        interpreter.getInputTensor(0).copyFrom(input);
+        // tflite_flutter 0.10.x: write via ByteData buffer (no copyFrom)
+        final td = interpreter.getInputTensor(0).data;
+        td.buffer.asFloat32List(td.offsetInBytes, input.length).setAll(0, input);
         interpreter.invoke();
 
         final outBytes = interpreter.getOutputTensor(0).data;
