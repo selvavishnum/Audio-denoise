@@ -8,7 +8,12 @@ class AuthProvider extends ChangeNotifier {
   static const _adminEmail = 'selvavishnu.m@gmail.com';
 
   final _auth = FirebaseAuth.instance;
-  final _googleSignIn = GoogleSignIn();
+  // serverClientId (web client type-3) is required for Android to generate
+  // a non-null idToken that Firebase Auth can consume via credential().
+  final _googleSignIn = GoogleSignIn(
+    serverClientId: '888976648050-nk5svn13jeu28aleiis2lj36qbs5ia9f.apps.googleusercontent.com',
+    scopes: ['email', 'profile'],
+  );
 
   User? get user => _auth.currentUser;
   bool get isLoggedIn => user != null;
@@ -35,7 +40,8 @@ class AuthProvider extends ChangeNotifier {
       await AnalyticsService.logGoogleLoginCompleted();
       notifyListeners();
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Google Sign-In error: $e');
       return false;
     }
   }
