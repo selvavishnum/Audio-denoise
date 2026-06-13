@@ -259,6 +259,7 @@ class AudioProvider extends ChangeNotifier {
         originalAudio!.samples,
         processedAudio!.samples,
         DateTime.now().difference(startTime),
+        usedNeural: ProcessorService.lastUsedNeural,
       );
 
       await _saveProcessed();
