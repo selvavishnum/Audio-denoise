@@ -1,11 +1,13 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/audio_params.dart';
 import '../services/processor_service.dart';
+
+export '../models/audio_params.dart';
 
 const _channel = MethodChannel('com.selvavishnu.clearwave/video');
 const _uuid    = Uuid();
@@ -32,9 +34,11 @@ class VideoProcessorService {
       onProgress?.call(0.3);
 
       // Step 2 — load WAV and run DSP (30–85%)
-      final bytes  = await File(rawWav).readAsBytes();
-      final audio  = ProcessorService.decodeWav(bytes);
+      final bytes = await File(rawWav).readAsBytes();
+      final audio = ProcessorService.decodeWav(bytes);
       try { await File(rawWav).delete(); } catch (_) {}
+
+      if (audio == null) return null;
 
       final cleaned = await ProcessorService.process(
         audio, params,
@@ -74,6 +78,3 @@ class VideoProcessorService {
     }
   }
 }
-
-// Re-export AudioParams so the screen doesn't need a separate import.
-export '../models/audio_params.dart';
