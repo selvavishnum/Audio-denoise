@@ -26,7 +26,7 @@ def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '
 def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
 
 android {
-    namespace 'com.selvavishnu.clearwave'
+    namespace 'com.noiseclear.app'
     compileSdk 36
     ndkVersion "28.2.13676358"
 
@@ -44,12 +44,23 @@ android {
     }
 
     defaultConfig {
-        applicationId 'com.selvavishnu.clearwave'
+        applicationId 'com.noiseclear.app'
         minSdk 24
         targetSdk 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true
+
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    packagingOptions {
+        // Prevent duplicate TFLite native library conflicts
+        pickFirst 'lib/armeabi-v7a/libtensorflowlite_jni.so'
+        pickFirst 'lib/arm64-v8a/libtensorflowlite_jni.so'
+        pickFirst 'lib/x86_64/libtensorflowlite_jni.so'
     }
 
     signingConfigs {
@@ -85,4 +96,5 @@ flutter {
 
 dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.18.0'
 }

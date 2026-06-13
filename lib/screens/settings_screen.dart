@@ -78,6 +78,10 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _accountSection(BuildContext context, AuthProvider auth, SubscriptionProvider sub) {
+    final isAdmin = auth.isAdmin;
+    final badgeLabel = isAdmin ? 'Admin' : (sub.isPro ? sub.planLabel : 'Free');
+    final badgeActive = sub.isPro || isAdmin;
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -85,7 +89,6 @@ class SettingsScreen extends StatelessWidget {
         children: [
           // ── Profile card ──────────────────────────────────────────────
           Row(children: [
-            // Avatar
             Container(
               width: 56, height: 56,
               decoration: BoxDecoration(
@@ -114,23 +117,23 @@ class SettingsScreen extends StatelessWidget {
                       style: const TextStyle(fontSize: 12, color: AppColors.textSec),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                 if (!auth.isLoggedIn)
-                  const Text('Sign in to unlock Pro plans',
+                  const Text('Sign in to sync and unlock Pro',
                       style: TextStyle(fontSize: 12, color: AppColors.textSec)),
               ]),
             ),
-            // Plan badge
+            // Plan / Admin badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: sub.isPro ? AppColors.textPrim : AppColors.surface,
+                color: badgeActive ? AppColors.textPrim : AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
-                border: sub.isPro ? null : Border.all(color: AppColors.border, width: 0.5),
+                border: badgeActive ? null : Border.all(color: AppColors.border, width: 0.5),
               ),
               child: Text(
-                sub.isPro ? sub.planLabel : 'Free',
+                badgeLabel,
                 style: TextStyle(
                     fontSize: 11, fontWeight: FontWeight.w700,
-                    color: sub.isPro ? AppColors.white : AppColors.textSec),
+                    color: badgeActive ? AppColors.white : AppColors.textSec),
               ),
             ),
           ]),
@@ -140,24 +143,39 @@ class SettingsScreen extends StatelessWidget {
           const SizedBox(height: 14),
 
           // ── Actions ───────────────────────────────────────────────────
-          if (!sub.isPro)
-            GestureDetector(
-              onTap: () => Navigator.push(
-                  context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.textPrim,
-                  borderRadius: BorderRadius.circular(12),
+          if (!auth.isLoggedIn) ...[
+            // Google Sign-In button
+            _GoogleSignInButton(onTap: () async {
+              final ok = await context.read<AuthProvider>().signInWithGoogle();
+              if (ok && context.mounted) {
+                final uid = context.read<AuthProvider>().user?.uid;
+                if (uid != null) {
+                  await context.read<SubscriptionProvider>().loginUser(uid);
+                }
+              }
+            }),
+          ] else ...[
+            // Upgrade button for non-Pro, non-admin users
+            if (!sub.isPro && !isAdmin) ...[
+              GestureDetector(
+                onTap: () => Navigator.push(
+                    context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.textPrim,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text('Upgrade to Pro',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                          color: AppColors.white)),
                 ),
-                child: const Text('Upgrade to Pro',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                        color: AppColors.white)),
               ),
-            ),
-          if (sub.isPro && auth.isLoggedIn) ...[
+              const SizedBox(height: 10),
+            ],
+            // Sign Out — always shown when logged in
             GestureDetector(
               onTap: () async {
                 await context.read<AuthProvider>().signOut();
@@ -175,29 +193,6 @@ class SettingsScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                         color: AppColors.textSec)),
-              ),
-            ),
-          ],
-          if (!auth.isLoggedIn) ...[
-            const SizedBox(height: 10),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                  context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border, width: 0.5),
-                ),
-                child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.login_rounded, size: 16, color: AppColors.textSec),
-                  SizedBox(width: 8),
-                  Text('Sign in with Google',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                          color: AppColors.textSec)),
-                ]),
               ),
             ),
           ],
@@ -413,6 +408,55 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
+
+class _GoogleSignInButton extends StatefulWidget {
+  final Future<void> Function() onTap;
+  const _GoogleSignInButton({required this.onTap});
+
+  @override
+  State<_GoogleSignInButton> createState() => _GoogleSignInButtonState();
+}
+
+class _GoogleSignInButtonState extends State<_GoogleSignInButton> {
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _loading ? null : () async {
+        setState(() => _loading = true);
+        await widget.onTap();
+        if (mounted) setState(() => _loading = false);
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.textPrim,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: _loading
+            ? const SizedBox(
+                height: 18,
+                child: Center(
+                  child: SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AppColors.white),
+                  ),
+                ),
+              )
+            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.login_rounded, size: 16, color: AppColors.white),
+                SizedBox(width: 8),
+                Text('Sign in with Google',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                        color: AppColors.white)),
+              ]),
+      ),
+    );
+  }
+}
 
 class _HistoryRow extends StatelessWidget {
   final HistoryItem item;

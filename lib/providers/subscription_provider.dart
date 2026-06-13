@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
@@ -7,13 +8,16 @@ class SubscriptionProvider extends ChangeNotifier {
   // Replace with your RevenueCat Android public API key from the RC dashboard.
   static const _apiKey = 'REPLACE_WITH_REVENUECAT_ANDROID_API_KEY';
   static const _entitlementId = 'pro';
+  static const _adminEmail = 'selvavishnu.m@gmail.com';
 
   bool _isPro = false;
   String _activeProduct = '';
   List<Package> _packages = [];
   bool _initialized = false;
 
-  bool get isPro => _isPro;
+  // Admin email bypasses all paywalls — no purchase required.
+  bool get isPro => _isPro ||
+      (FirebaseAuth.instance.currentUser?.email == _adminEmail);
   String get activeProduct => _activeProduct;
   List<Package> get packages => _packages;
 
@@ -23,6 +27,8 @@ class SubscriptionProvider extends ChangeNotifier {
     if (_activeProduct.contains('lifetime')) return 'Pro Lifetime';
     return 'Pro Monthly';
   }
+
+  bool get initialized => _initialized;
 
   Future<void> initialize([String? userId]) async {
     if (_initialized) {
@@ -34,7 +40,9 @@ class SubscriptionProvider extends ChangeNotifier {
       final config = PurchasesConfiguration(_apiKey);
       await Purchases.configure(config);
       _initialized = true;
-      if (userId != null) await loginUser(userId);
+      // Auto-link to already-signed-in Firebase user if no uid supplied
+      final uid = userId ?? FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) await loginUser(uid);
       await refresh();
     } catch (_) {}
   }

@@ -51,6 +51,9 @@ dependencies:
   # Persistence (preset save, usage counter)
   shared_preferences: ^2.3.5
 
+  # Neural denoising (SpectralUNet TFLite inference)
+  tflite_flutter: ^0.10.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -58,3 +61,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/models/
