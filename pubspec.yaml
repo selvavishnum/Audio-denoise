@@ -51,8 +51,8 @@ dependencies:
   # Persistence (preset save, usage counter)
   shared_preferences: ^2.3.5
 
-  # Neural denoising (SpectralUNet TFLite inference)
-  tflite_flutter: ^0.10.4
+  # Neural denoising: DeepFilterNet2 runs via ONNX Runtime (native Android).
+  # TFLite removed — incompatible with Flutter 3.44.x Dart SDK.
 
 dev_dependencies:
   flutter_test:

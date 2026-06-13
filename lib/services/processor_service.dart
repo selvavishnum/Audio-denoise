@@ -18,23 +18,24 @@ class ProcessorService {
     // ── Neural denoising (DeepFilterNet2 ONNX preferred, TFLite fallback) ──────
     // When neural succeeds → return immediately, skip DSP entirely.
     // DSP chain only runs when no neural model is available.
-    final bool useDeepFilter = DeepFilterService.isReady;
-    final bool useTflite     = !useDeepFilter && NeuralProcessorService.isReady;
-
-    if (useDeepFilter || useTflite) {
+    // DeepFilterNet2 ONNX (best — studio quality, needs model files in assets)
+    if (DeepFilterService.isReady) {
       onProgress?.call(0.05);
-      Float32List? cleaned;
-      if (useDeepFilter) {
-        cleaned = await DeepFilterService.denoise(input.samples, input.sampleRate);
-      } else {
-        cleaned = await NeuralProcessorService.denoise(input.samples, input.sampleRate);
-      }
+      final cleaned = await DeepFilterService.denoise(
+          input.samples, input.sampleRate);
       if (cleaned != null) {
         onProgress?.call(1.0);
         return AudioData.fromSamples(cleaned, input.sampleRate);
       }
-      // Neural failed silently → fall through to DSP
-      onProgress?.call(0.1);
+    }
+
+    // MMSE-STSA pure-Dart voice isolator (always ready, no model files needed)
+    onProgress?.call(0.05);
+    final neural = await NeuralProcessorService.denoise(
+        input.samples, input.sampleRate);
+    if (neural != null) {
+      onProgress?.call(1.0);
+      return AudioData.fromSamples(neural, input.sampleRate);
     }
 
     // ── DSP fallback (runs only when neural model not loaded / failed) ─────────
