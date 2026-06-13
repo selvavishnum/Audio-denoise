@@ -12,7 +12,20 @@
           "package_name": "com.noiseclear.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "888976648050-mlt0olqrpcgqfmdhhl6obuo14hf3k9h7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.noiseclear.app",
+            "certificate_hash": "cc2466cdf983d07515cf0141f54724feb34a9a98"
+          }
+        },
+        {
+          "client_id": "888976648050-nk5svn13jeu28aleiis2lj36qbs5ia9f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDlQEmAu7b8ThZ0DphFZ71vrWZCdO9N1FA"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "888976648050-nk5svn13jeu28aleiis2lj36qbs5ia9f.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
