@@ -1,26 +1,21 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "noiseclear-placeholder",
-    "storage_bucket": "noiseclear-placeholder.appspot.com"
+    "project_number": "888976648050",
+    "project_id": "noise-clear",
+    "storage_bucket": "noise-clear.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:888976648050:android:04c11276b27cdcd50bdfeb",
         "android_client_info": {
           "package_name": "com.noiseclear.app"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "REPLACE_WITH_REAL_API_KEY"
+          "current_key": "AIzaSyDlQEmAu7b8ThZ0DphFZ71vrWZCdO9N1FA"
         }
       ],
       "services": {
