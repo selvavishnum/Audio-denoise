@@ -24,6 +24,8 @@ jobs:
   release:
     name: Build & Publish Release APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       # ── Checkout ──────────────────────────────────────────────────────
