@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import '../models/audio_params.dart';
+import 'deepfilter_service.dart';
 import 'fft_service.dart';
 import 'neural_processor_service.dart';
 
@@ -15,16 +16,20 @@ class ProcessorService {
     void Function(double)? onProgress,
   }) async {
     // ── Stage 0: Neural denoising (0 → 25% of progress bar) ─────────────────
-    // SpectralUNet IRM mask applied in a compute() isolate.
-    // Falls back to DSP-only silently if model not bundled or inference fails.
+    // Preference: DeepFilterNet2 (ONNX, 48 kHz) → TFLite SpectralUNet → DSP only.
     AudioData stageInput = input;
-    final bool useNeural = NeuralProcessorService.isReady;
+    final bool useDeepFilter = DeepFilterService.isReady;
+    final bool useTflite     = !useDeepFilter && NeuralProcessorService.isReady;
+    final bool useNeural     = useDeepFilter || useTflite;
 
     if (useNeural) {
       onProgress?.call(0.01);
-      final cleaned = await NeuralProcessorService.denoise(
-        input.samples, input.sampleRate,
-      );
+      Float32List? cleaned;
+      if (useDeepFilter) {
+        cleaned = await DeepFilterService.denoise(input.samples, input.sampleRate);
+      } else {
+        cleaned = await NeuralProcessorService.denoise(input.samples, input.sampleRate);
+      }
       if (cleaned != null) {
         stageInput = AudioData.fromSamples(cleaned, input.sampleRate);
       }

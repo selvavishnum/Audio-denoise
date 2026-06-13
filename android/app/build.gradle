@@ -96,4 +96,5 @@ flutter {
 
 dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.18.0'
 }
