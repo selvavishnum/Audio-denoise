@@ -146,12 +146,20 @@ class SettingsScreen extends StatelessWidget {
           if (!auth.isLoggedIn) ...[
             // Google Sign-In button
             _GoogleSignInButton(onTap: () async {
-              final ok = await context.read<AuthProvider>().signInWithGoogle();
-              if (ok && context.mounted) {
-                final uid = context.read<AuthProvider>().user?.uid;
+              final authProv = context.read<AuthProvider>();
+              final ok = await authProv.signInWithGoogle();
+              if (!context.mounted) return;
+              if (ok) {
+                final uid = authProv.user?.uid;
                 if (uid != null) {
                   await context.read<SubscriptionProvider>().loginUser(uid);
                 }
+              } else if (authProv.lastError != null) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(authProv.lastError!),
+                  duration: const Duration(seconds: 8),
+                  backgroundColor: AppColors.danger,
+                ));
               }
             }),
           ] else ...[
