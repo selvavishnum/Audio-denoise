@@ -33,12 +33,15 @@ class ProcessorService {
   }) async {
     onProgress?.call(0.05);
 
-    // ── Primary: DeepFilterNet3 ONNX neural engine ───────────────────────────
-    if (deepFilterEnabled && DeepFilterService.isReady) {
+    // ── Primary: Kotlin neural engine (ONNX DeepFilterNet3 → built-in OMLSA) ──
+    // DeepFilterService.denoise() tries ONNX first, then falls back to the
+    // built-in NeuralNoiseProcessor — both run entirely on-device in Kotlin.
+    if (deepFilterEnabled && DeepFilterService.hasAnyEngine) {
       final cleaned = await DeepFilterService.denoise(
         input.samples,
         input.sampleRate,
         isolator: premium,
+        preferDeepFilter: true,
       );
       if (cleaned != null) {
         lastUsedNeural = true;
