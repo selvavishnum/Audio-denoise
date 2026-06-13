@@ -17,6 +17,7 @@ import 'screens/video_denoise_screen.dart';
 import 'screens/edit_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/ad_service.dart';
+import 'services/neural_processor_service.dart';
 import 'theme.dart';
 
 void main() async {
@@ -38,6 +39,10 @@ void main() async {
 
   // AdMob initializes asynchronously; pre-loads first rewarded ad.
   unawaited(AdService.initialize());
+
+  // Neural denoiser — loads TFLite model from assets if bundled.
+  // Falls back to DSP-only silently when model file is absent.
+  unawaited(NeuralProcessorService.initialize());
 
   runApp(const NoiseClearApp());
 }

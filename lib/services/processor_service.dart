@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import '../models/audio_params.dart';
 import 'fft_service.dart';
+import 'neural_processor_service.dart';
 
 // ─── Public entry point ────────────────────────────────────────────────────
 
@@ -13,42 +14,67 @@ class ProcessorService {
     AudioParams params, {
     void Function(double)? onProgress,
   }) async {
+    // ── Stage 0: Neural denoising (0 → 25% of progress bar) ─────────────────
+    // SpectralUNet IRM mask applied in a compute() isolate.
+    // Falls back to DSP-only silently if model not bundled or inference fails.
+    AudioData stageInput = input;
+    final bool useNeural = NeuralProcessorService.isReady;
+
+    if (useNeural) {
+      onProgress?.call(0.01);
+      final cleaned = await NeuralProcessorService.denoise(
+        input.samples, input.sampleRate,
+      );
+      if (cleaned != null) {
+        stageInput = AudioData.fromSamples(cleaned, input.sampleRate);
+      }
+      onProgress?.call(0.25);
+    }
+
+    // ── Stage 1: DSP refinement (25 → 100%, or 0 → 100% without neural) ─────
+    final double progressOffset = useNeural ? 0.25 : 0.0;
+    final double progressScale  = useNeural ? 0.75 : 1.0;
+
     final receivePort = ReceivePort();
     await Isolate.spawn(_processIsolate, {
-      'sendPort': receivePort.sendPort,
-      'samples': input.samples,
-      'rate': input.sampleRate,
-      'params': params.toMap(),
+      'sendPort':       receivePort.sendPort,
+      'samples':        stageInput.samples,
+      'rate':           stageInput.sampleRate,
+      'params':         params.toMap(),
+      'progressOffset': progressOffset,
+      'progressScale':  progressScale,
     });
 
     Float32List? result;
-    int resultRate = input.sampleRate;
+    int resultRate = stageInput.sampleRate;
 
     await for (final msg in receivePort) {
       if (msg is double) {
         onProgress?.call(msg);
       } else if (msg is Map) {
-        result = msg['samples'] as Float32List;
+        result     = msg['samples'] as Float32List;
         resultRate = msg['rate'] as int;
         break;
       }
     }
     receivePort.close();
 
-    return AudioData.fromSamples(result ?? input.samples, resultRate);
+    return AudioData.fromSamples(result ?? stageInput.samples, resultRate);
   }
 
   // ─── Isolate entry ─────────────────────────────────────────────────────
 
   static void _processIsolate(Map<String, dynamic> args) {
     final sendPort = args['sendPort'] as SendPort;
-    final samples = args['samples'] as Float32List;
-    final rate = args['rate'] as int;
-    final params = AudioParams.fromMap(args['params'] as Map<String, dynamic>);
+    final samples  = args['samples'] as Float32List;
+    final rate     = args['rate'] as int;
+    final params   = AudioParams.fromMap(args['params'] as Map<String, dynamic>);
+    final double offset = (args['progressOffset'] as double?) ?? 0.0;
+    final double scale  = (args['progressScale']  as double?) ?? 1.0;
 
     Float32List s = Float32List.fromList(samples);
 
-    void progress(double p) => sendPort.send(p);
+    void progress(double p) => sendPort.send(offset + p * scale);
 
     progress(0.02);
     final noiseProfile = _buildNoiseProfile(s, rate, params);
