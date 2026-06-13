@@ -8,7 +8,10 @@ class SubscriptionProvider extends ChangeNotifier {
   // Replace with your RevenueCat Android public API key from the RC dashboard.
   static const _apiKey = 'REPLACE_WITH_REVENUECAT_ANDROID_API_KEY';
   static const _entitlementId = 'pro';
-  static const _adminEmail = 'selvavishnu.m@gmail.com';
+  static const _adminEmail = String.fromEnvironment(
+    'ADMIN_EMAIL',
+    defaultValue: 'selvavishnu.m@gmail.com',
+  );
 
   bool _isPro = false;
   String _activeProduct = '';
