@@ -16,7 +16,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private val videoProcessor = VideoAudioProcessor()
-    private val deepFilter     = DeepFilterProcessor()
+    private val deepFilter     = DeepFilterProcessor(this)
     private val handler        = Handler(Looper.getMainLooper())
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -53,7 +53,7 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "initDeepFilter" -> {
                         Thread {
-                            val ok = deepFilter.initialize(applicationContext)
+                            val ok = deepFilter.initialize()
                             handler.post { result.success(ok) }
                         }.start()
                     }
