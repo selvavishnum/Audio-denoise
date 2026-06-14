@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/audio_params.dart';
-import '../models/processing_stats.dart';
 import '../providers/audio_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/subscription_provider.dart';
@@ -30,7 +29,6 @@ class SettingsScreen extends StatelessWidget {
             _section(context, 'Account', _accountSection(context, auth, sub)),
             _section(context, 'Default Preset', _presetSelector(context)),
             _section(context, 'AI Engine', _engineToggles(context, prov)),
-            _section(context, 'DSP Effects', _processingToggles(context, prov)),
             _section(context, 'About', _about(context)),
             if (prov.recentFiles.isNotEmpty)
               _section(context, 'Recent Files', _historyList(prov)),
@@ -276,32 +274,21 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _engineToggles(BuildContext context, AudioProvider prov) {
-    final modelReady = DeepFilterService.isReady;
+    final onnxReady    = DeepFilterService.isReady;
+    final builtInReady = DeepFilterService.isBuiltInReady;
     return Column(
       children: [
         _SettingsRow(
           icon: Icons.auto_awesome_rounded,
-          title: 'Neural AI (DeepFilterNet3)',
-          subtitle: modelReady
-              ? 'ONNX neural model · Studio-grade quality'
-              : 'ONNX model files not found — add to assets/models/',
+          title: 'Neural AI',
+          subtitle: onnxReady
+              ? 'DeepFilterNet3 ONNX · Studio-grade quality'
+              : builtInReady
+                  ? 'Built-in OMLSA-IMCRA · Always available'
+                  : 'Initialising…',
           trailing: Switch(
             value: prov.deepFilterEnabled,
-            onChanged: modelReady
-                ? (_) => context.read<AudioProvider>().toggleDeepFilter()
-                : null,
-            activeColor: AppColors.textPrim,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-        ),
-        _divider(),
-        _SettingsRow(
-          icon: Icons.waves_rounded,
-          title: 'MMSE-STSA',
-          subtitle: 'Spectral suppression · Always available · Fast',
-          trailing: Switch(
-            value: prov.mmseEnabled,
-            onChanged: (_) => context.read<AudioProvider>().toggleMmse(),
+            onChanged: (_) => context.read<AudioProvider>().toggleDeepFilter(),
             activeColor: AppColors.textPrim,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
@@ -310,76 +297,10 @@ class SettingsScreen extends StatelessWidget {
         _SettingsRow(
           icon: Icons.record_voice_over_rounded,
           title: 'Voice Isolator',
-          subtitle: 'ElevenLabs-style 2-pass extraction · Removes music & noise',
+          subtitle: '2-pass aggressive extraction · Removes music & other voices',
           trailing: Switch(
             value: prov.isolatorEnabled,
             onChanged: (_) => context.read<AudioProvider>().toggleIsolator(),
-            activeColor: AppColors.textPrim,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-        ),
-        _divider(),
-        _SettingsRow(
-          icon: Icons.graphic_eq_rounded,
-          title: 'DSP Mode',
-          subtitle: 'Force spectral DSP · Skips neural, uses MMSE filter',
-          trailing: Switch(
-            value: prov.dspEnabled,
-            onChanged: (_) => context.read<AudioProvider>().toggleDsp(),
-            activeColor: AppColors.textPrim,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _processingToggles(BuildContext context, AudioProvider prov) {
-    return Column(
-      children: [
-        _SettingsRow(
-          icon: Icons.noise_control_off_rounded,
-          title: 'Noise Reduction',
-          subtitle: 'Apply spectral gating after engine processing',
-          trailing: Switch(
-            value: prov.noiseReductionEnabled,
-            onChanged: (_) => context.read<AudioProvider>().toggleNoiseReduction(),
-            activeColor: AppColors.textPrim,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-        ),
-        _divider(),
-        _SettingsRow(
-          icon: Icons.compress_rounded,
-          title: 'Dynamic Compression',
-          subtitle: 'Automatic level and loudness control',
-          trailing: Switch(
-            value: prov.compressionEnabled,
-            onChanged: (_) => context.read<AudioProvider>().toggleCompression(),
-            activeColor: AppColors.textPrim,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-        ),
-        _divider(),
-        _SettingsRow(
-          icon: Icons.hearing_rounded,
-          title: 'Voice Activity Detection',
-          subtitle: 'Silence gating with adaptive hold time',
-          trailing: Switch(
-            value: prov.vadEnabled,
-            onChanged: (_) => context.read<AudioProvider>().toggleVad(),
-            activeColor: AppColors.textPrim,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-        ),
-        _divider(),
-        _SettingsRow(
-          icon: Icons.hd_rounded,
-          title: 'HD Mode',
-          subtitle: 'FFmpeg afftdn pre-processing for deeper noise removal',
-          trailing: Switch(
-            value: prov.hdModeEnabled,
-            onChanged: (_) => context.read<AudioProvider>().toggleHdMode(),
             activeColor: AppColors.textPrim,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
