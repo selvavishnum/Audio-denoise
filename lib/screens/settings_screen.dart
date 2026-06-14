@@ -308,6 +308,18 @@ class SettingsScreen extends StatelessWidget {
         ),
         _divider(),
         _SettingsRow(
+          icon: Icons.record_voice_over_rounded,
+          title: 'Voice Isolator',
+          subtitle: 'ElevenLabs-style 2-pass extraction · Removes music & noise',
+          trailing: Switch(
+            value: prov.isolatorEnabled,
+            onChanged: (_) => context.read<AudioProvider>().toggleIsolator(),
+            activeColor: AppColors.textPrim,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        _divider(),
+        _SettingsRow(
           icon: Icons.graphic_eq_rounded,
           title: 'DSP Mode',
           subtitle: 'Force spectral DSP · Skips neural, uses MMSE filter',

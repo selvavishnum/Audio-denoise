@@ -35,6 +35,7 @@ class AudioProvider extends ChangeNotifier {
   bool deepFilterEnabled = true;  // DeepFilterNet3 ONNX neural engine
   bool mmseEnabled       = true;  // MMSE-STSA spectral suppression
   bool dspEnabled        = false; // Force DSP-only mode (skips neural)
+  bool isolatorEnabled   = false; // Voice Isolator — aggressive 2-pass extraction
 
   // ── DSP feature toggles ───────────────────────────────────────────────
   bool noiseReductionEnabled = true;
@@ -95,6 +96,7 @@ class AudioProvider extends ChangeNotifier {
     deepFilterEnabled      = prefs.getBool('deepFilterEnabled') ?? true;
     mmseEnabled            = prefs.getBool('mmseEnabled')       ?? true;
     dspEnabled             = prefs.getBool('dspEnabled')        ?? false;
+    isolatorEnabled        = prefs.getBool('isolatorEnabled')   ?? false;
     noiseReductionEnabled  = prefs.getBool('nrEnabled')   ?? true;
     compressionEnabled     = prefs.getBool('compEnabled') ?? true;
     vadEnabled             = prefs.getBool('vadEnabled')  ?? true;
@@ -152,6 +154,13 @@ class AudioProvider extends ChangeNotifier {
     dspEnabled = !dspEnabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('dspEnabled', dspEnabled);
+    notifyListeners();
+  }
+
+  Future<void> toggleIsolator() async {
+    isolatorEnabled = !isolatorEnabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isolatorEnabled', isolatorEnabled);
     notifyListeners();
   }
 
@@ -277,7 +286,8 @@ class AudioProvider extends ChangeNotifier {
 
       processedAudio = await ProcessorService.process(
         inputForDsp, params,
-        premium: premium,
+        // Voice Isolator forces the aggressive 2-pass extraction even on free tier.
+        premium: premium || isolatorEnabled,
         deepFilterEnabled: deepFilterEnabled && !dspEnabled,
         mmseEnabled: mmseEnabled || dspEnabled,
         onProgress: (p) {
