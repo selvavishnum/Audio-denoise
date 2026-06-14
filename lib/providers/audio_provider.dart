@@ -32,8 +32,7 @@ class AudioProvider extends ChangeNotifier {
   bool hdModeEnabled = false;
 
   // ── AI Engine toggles ─────────────────────────────────────────────────
-  bool deepFilterEnabled = true;  // DeepFilterNet3 ONNX or built-in OMLSA
-  bool isolatorEnabled   = false; // Voice Isolator — aggressive 2-pass extraction
+  bool isolatorEnabled = false; // Voice Isolator — aggressive 2-pass extraction
 
   // ── Recent history ────────────────────────────────────────────────────
   final List<HistoryItem> recentFiles = [];
@@ -83,11 +82,10 @@ class AudioProvider extends ChangeNotifier {
     final idx    = prefs.getInt('preset') ?? VoicePreset.natural.index;
     final preset = VoicePreset.values[idx.clamp(0, VoicePreset.values.length - 1)];
     params        = AudioParams.presets[preset]!;
-    _exportCount           = prefs.getInt('exportCount') ?? 0;
-    hdModeEnabled          = prefs.getBool('hdMode') ?? false;
-    _lastBonusDate         = prefs.getString('lastBonusDate');
-    deepFilterEnabled = prefs.getBool('deepFilterEnabled') ?? true;
-    isolatorEnabled   = prefs.getBool('isolatorEnabled')   ?? false;
+    _exportCount   = prefs.getInt('exportCount') ?? 0;
+    hdModeEnabled  = prefs.getBool('hdMode') ?? false;
+    _lastBonusDate = prefs.getString('lastBonusDate');
+    isolatorEnabled = prefs.getBool('isolatorEnabled') ?? false;
     _loadHistory(prefs);
     notifyListeners();
   }
@@ -121,13 +119,6 @@ class AudioProvider extends ChangeNotifier {
     hdModeEnabled = !hdModeEnabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hdMode', hdModeEnabled);
-    notifyListeners();
-  }
-
-  Future<void> toggleDeepFilter() async {
-    deepFilterEnabled = !deepFilterEnabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('deepFilterEnabled', deepFilterEnabled);
     notifyListeners();
   }
 
@@ -239,9 +230,7 @@ class AudioProvider extends ChangeNotifier {
 
       processedAudio = await ProcessorService.process(
         inputForDsp, params,
-        // Voice Isolator forces the aggressive 2-pass extraction even on free tier.
         premium: premium || isolatorEnabled,
-        neuralEnabled: deepFilterEnabled,
         onProgress: (p) {
           progress = hdModeEnabled ? 0.05 + p * 0.95 : p;
           notifyListeners();
