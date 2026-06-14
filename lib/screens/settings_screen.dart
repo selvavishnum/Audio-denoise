@@ -277,21 +277,26 @@ class SettingsScreen extends StatelessWidget {
   Widget _engineToggles(BuildContext context, AudioProvider prov) {
     final onnxReady    = DeepFilterService.isReady;
     final builtInReady = DeepFilterService.isBuiltInReady;
+    final engineLabel  = onnxReady
+        ? 'DeepFilterNet3 ONNX · Studio-grade quality'
+        : builtInReady
+            ? 'Built-in OMLSA-IMCRA · Always available'
+            : 'Dart MMSE-STSA · Always-on fallback';
     return Column(
       children: [
         _SettingsRow(
           icon: Icons.auto_awesome_rounded,
           title: 'Neural AI',
-          subtitle: onnxReady
-              ? 'DeepFilterNet3 ONNX · Studio-grade quality'
-              : builtInReady
-                  ? 'Built-in OMLSA-IMCRA · Always available'
-                  : 'Initialising…',
-          trailing: Switch(
-            value: prov.deepFilterEnabled,
-            onChanged: (_) => context.read<AudioProvider>().toggleDeepFilter(),
-            activeColor: AppColors.textPrim,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          subtitle: engineLabel,
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.textPrim,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text('On',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                    color: AppColors.white)),
           ),
         ),
         _divider(),
