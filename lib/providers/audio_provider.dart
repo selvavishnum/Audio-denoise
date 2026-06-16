@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 import '../models/audio_params.dart';
 import '../models/processing_stats.dart';
 import '../services/processor_service.dart';
+import '../services/stem_separator_service.dart';
 
 class AudioProvider extends ChangeNotifier {
   AudioData? originalAudio;
@@ -32,8 +33,15 @@ class AudioProvider extends ChangeNotifier {
   bool hdModeEnabled = false;
 
   // ── AI Engine toggles ─────────────────────────────────────────────────
-  bool deepFilterEnabled = true;  // DeepFilterNet3 ONNX or built-in OMLSA
-  bool isolatorEnabled   = false; // Voice Isolator — aggressive 2-pass extraction
+  bool isolatorEnabled = false; // Voice Isolator — aggressive 2-pass extraction
+
+  // ── Vocal / Music split ──────────────────────────────────────────────
+  AudioData? vocalsAudio;
+  AudioData? musicAudio;
+  String? vocalsPath;
+  String? musicPath;
+  bool isSplitting = false;
+  double splitProgress = 0.0;
 
   // ── Recent history ────────────────────────────────────────────────────
   final List<HistoryItem> recentFiles = [];
@@ -65,10 +73,16 @@ class AudioProvider extends ChangeNotifier {
   // ── Playback ──────────────────────────────────────────────────────────
   final _origPlayer = AudioPlayer();
   final _procPlayer = AudioPlayer();
+  final _vocalsPlayer = AudioPlayer();
+  final _musicPlayer = AudioPlayer();
   bool _playingOrig = false;
   bool _playingProc = false;
+  bool _playingVocals = false;
+  bool _playingMusic = false;
   bool get playingOriginal  => _playingOrig;
   bool get playingProcessed => _playingProc;
+  bool get playingVocals    => _playingVocals;
+  bool get playingMusic     => _playingMusic;
 
   // ── Recording ─────────────────────────────────────────────────────────
   final _recorder = AudioRecorder();
@@ -83,11 +97,10 @@ class AudioProvider extends ChangeNotifier {
     final idx    = prefs.getInt('preset') ?? VoicePreset.natural.index;
     final preset = VoicePreset.values[idx.clamp(0, VoicePreset.values.length - 1)];
     params        = AudioParams.presets[preset]!;
-    _exportCount           = prefs.getInt('exportCount') ?? 0;
-    hdModeEnabled          = prefs.getBool('hdMode') ?? false;
-    _lastBonusDate         = prefs.getString('lastBonusDate');
-    deepFilterEnabled = prefs.getBool('deepFilterEnabled') ?? true;
-    isolatorEnabled   = prefs.getBool('isolatorEnabled')   ?? false;
+    _exportCount   = prefs.getInt('exportCount') ?? 0;
+    hdModeEnabled  = prefs.getBool('hdMode') ?? false;
+    _lastBonusDate = prefs.getString('lastBonusDate');
+    isolatorEnabled = prefs.getBool('isolatorEnabled') ?? false;
     _loadHistory(prefs);
     notifyListeners();
   }
@@ -124,13 +137,6 @@ class AudioProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> toggleDeepFilter() async {
-    deepFilterEnabled = !deepFilterEnabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('deepFilterEnabled', deepFilterEnabled);
-    notifyListeners();
-  }
-
   Future<void> toggleIsolator() async {
     isolatorEnabled = !isolatorEnabled;
     final prefs = await SharedPreferences.getInstance();
@@ -145,6 +151,10 @@ class AudioProvider extends ChangeNotifier {
     processedAudio = null;
     processedPath  = null;
     lastStats      = null;
+    vocalsAudio    = null;
+    musicAudio     = null;
+    vocalsPath     = null;
+    musicPath      = null;
     _history.clear();
 
     try {
@@ -239,9 +249,7 @@ class AudioProvider extends ChangeNotifier {
 
       processedAudio = await ProcessorService.process(
         inputForDsp, params,
-        // Voice Isolator forces the aggressive 2-pass extraction even on free tier.
         premium: premium || isolatorEnabled,
-        neuralEnabled: deepFilterEnabled,
         onProgress: (p) {
           progress = hdModeEnabled ? 0.05 + p * 0.95 : p;
           notifyListeners();
@@ -269,6 +277,49 @@ class AudioProvider extends ChangeNotifier {
   Future<AudioData?> _ffmpegPreDenoise(AudioData audio) async {
     // FFmpeg-kit is not bundled; HD pre-denoise step is skipped.
     return null;
+  }
+
+  // ── Vocal / Music split ─────────────────────────────────────────────────
+
+  Future<void> splitStems() async {
+    if (originalAudio == null) return;
+    isSplitting   = true;
+    splitProgress = 0.1;
+    errorMessage  = null;
+    notifyListeners();
+
+    try {
+      final result = await StemSeparatorService.separate(
+          originalAudio!.samples, originalAudio!.sampleRate);
+      if (result == null) {
+        errorMessage = 'Could not separate vocals and music';
+      } else {
+        vocalsAudio = AudioData.fromSamples(result.vocals, originalAudio!.sampleRate);
+        musicAudio  = AudioData.fromSamples(result.instrumental, originalAudio!.sampleRate);
+        splitProgress = 0.9;
+        notifyListeners();
+        await _saveStems();
+      }
+    } catch (e) {
+      errorMessage = 'Split error: $e';
+    }
+
+    isSplitting   = false;
+    splitProgress = 0;
+    notifyListeners();
+  }
+
+  Future<void> _saveStems() async {
+    if (vocalsAudio == null || musicAudio == null) return;
+    final dir = await getApplicationDocumentsDirectory();
+    final vPath = '${dir.path}/vocals_${_uuid.v4()}.wav';
+    final mPath = '${dir.path}/instrumental_${_uuid.v4()}.wav';
+    await File(vPath).writeAsBytes(
+        ProcessorService.encodeWav(vocalsAudio!.samples, vocalsAudio!.sampleRate));
+    await File(mPath).writeAsBytes(
+        ProcessorService.encodeWav(musicAudio!.samples, musicAudio!.sampleRate));
+    vocalsPath = vPath;
+    musicPath  = mPath;
   }
 
   Future<void> _saveProcessed() async {
@@ -320,7 +371,11 @@ class AudioProvider extends ChangeNotifier {
 
   Future<void> togglePlayOriginal() async {
     await _procPlayer.stop();
+    await _vocalsPlayer.stop();
+    await _musicPlayer.stop();
     _playingProc = false;
+    _playingVocals = false;
+    _playingMusic = false;
     if (_playingOrig) {
       await _origPlayer.stop();
       _playingOrig = false;
@@ -340,7 +395,11 @@ class AudioProvider extends ChangeNotifier {
 
   Future<void> togglePlayProcessed() async {
     await _origPlayer.stop();
+    await _vocalsPlayer.stop();
+    await _musicPlayer.stop();
     _playingOrig = false;
+    _playingVocals = false;
+    _playingMusic = false;
     if (_playingProc) {
       await _procPlayer.stop();
       _playingProc = false;
@@ -358,10 +417,62 @@ class AudioProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> togglePlayVocals() async {
+    await _origPlayer.stop();
+    await _procPlayer.stop();
+    await _musicPlayer.stop();
+    _playingOrig = false;
+    _playingProc = false;
+    _playingMusic = false;
+    if (_playingVocals) {
+      await _vocalsPlayer.stop();
+      _playingVocals = false;
+    } else if (vocalsPath != null) {
+      await _vocalsPlayer.setFilePath(vocalsPath!);
+      await _vocalsPlayer.play();
+      _playingVocals = true;
+      _vocalsPlayer.playerStateStream.listen((s) {
+        if (s.processingState == ProcessingState.completed) {
+          _playingVocals = false;
+          notifyListeners();
+        }
+      });
+    }
+    notifyListeners();
+  }
+
+  Future<void> togglePlayMusic() async {
+    await _origPlayer.stop();
+    await _procPlayer.stop();
+    await _vocalsPlayer.stop();
+    _playingOrig = false;
+    _playingProc = false;
+    _playingVocals = false;
+    if (_playingMusic) {
+      await _musicPlayer.stop();
+      _playingMusic = false;
+    } else if (musicPath != null) {
+      await _musicPlayer.setFilePath(musicPath!);
+      await _musicPlayer.play();
+      _playingMusic = true;
+      _musicPlayer.playerStateStream.listen((s) {
+        if (s.processingState == ProcessingState.completed) {
+          _playingMusic = false;
+          notifyListeners();
+        }
+      });
+    }
+    notifyListeners();
+  }
+
   Future<void> stopAllPlayback() async {
     await _origPlayer.stop();
     await _procPlayer.stop();
+    await _vocalsPlayer.stop();
+    await _musicPlayer.stop();
     _playingOrig = false;
+    _playingVocals = false;
+    _playingMusic = false;
     _playingProc = false;
     notifyListeners();
   }
@@ -374,11 +485,19 @@ class AudioProvider extends ChangeNotifier {
     if (_history.length > _maxHistory) _history.removeAt(0);
   }
 
+  void _clearStems() {
+    vocalsAudio = null;
+    musicAudio  = null;
+    vocalsPath  = null;
+    musicPath   = null;
+  }
+
   void undo() {
     if (_history.isEmpty) return;
     originalAudio  = _history.removeLast();
     processedAudio = null;
     processedPath  = null;
+    _clearStems();
     notifyListeners();
   }
 
@@ -388,6 +507,7 @@ class AudioProvider extends ChangeNotifier {
     originalAudio  = _savedOriginal;
     processedAudio = null;
     processedPath  = null;
+    _clearStems();
     notifyListeners();
   }
 
@@ -402,6 +522,7 @@ class AudioProvider extends ChangeNotifier {
         Float32List.fromList(audio.samples.sublist(start, end)), sr);
     processedAudio = null;
     processedPath  = null;
+    _clearStems();
     notifyListeners();
   }
 
@@ -415,6 +536,7 @@ class AudioProvider extends ChangeNotifier {
     originalAudio  = AudioData.fromSamples(combined, audio.sampleRate);
     processedAudio = null;
     processedPath  = null;
+    _clearStems();
     notifyListeners();
   }
 
@@ -432,6 +554,7 @@ class AudioProvider extends ChangeNotifier {
     originalAudio  = AudioData.fromSamples(mixed, audio.sampleRate);
     processedAudio = null;
     processedPath  = null;
+    _clearStems();
     notifyListeners();
   }
 
@@ -441,6 +564,8 @@ class AudioProvider extends ChangeNotifier {
   void dispose() {
     _origPlayer.dispose();
     _procPlayer.dispose();
+    _vocalsPlayer.dispose();
+    _musicPlayer.dispose();
     _recorder.dispose();
     super.dispose();
   }

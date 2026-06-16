@@ -40,22 +40,28 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
                 children: [
                   const SizedBox(height: 28),
                   _header(context),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+                  if (prov.originalAudio != null) _modeSelector(prov),
+                  const SizedBox(height: 8),
                   if (prov.originalAudio == null) _importCta(context, prov),
                   if (prov.originalAudio != null) ...[
                     _waveform(prov),
                     const SizedBox(height: 16),
-                    _abToggle(prov),
-                    if (prov.processedAudio != null && prov.lastStats != null) ...[
-                      const SizedBox(height: 14),
-                      _StatsCard(stats: prov.lastStats!),
+                    if (_isSplitMode(prov)) ...[
+                      if (prov.vocalsAudio != null) _stemsSection(prov),
+                    ] else ...[
+                      _abToggle(prov),
+                      if (prov.processedAudio != null && prov.lastStats != null) ...[
+                        const SizedBox(height: 14),
+                        _StatsCard(stats: prov.lastStats!),
+                      ],
+                      const SizedBox(height: 20),
+                      _presetsGrid(prov),
+                      const SizedBox(height: 16),
+                      _advancedSection(prov),
                     ],
-                    const SizedBox(height: 20),
-                    _presetsGrid(prov),
-                    const SizedBox(height: 16),
-                    _advancedSection(prov),
                   ],
-                  if (prov.isProcessing) ...[
+                  if (prov.isProcessing || prov.isSplitting) ...[
                     const SizedBox(height: 20),
                     _progressBar(prov),
                   ],
@@ -240,33 +246,137 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
     );
   }
 
-  Widget _progressBar(AudioProvider prov) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text('Processing…',
-              style: TextStyle(fontSize: 12, color: AppColors.textSec)),
-          Text('${(prov.progress * 100).round()}%',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrim)),
-        ],
+  bool _isSplitMode(AudioProvider prov) => prov.params.mode == ProcessingMode.extractMusic;
+
+  Widget _modeSelector(AudioProvider prov) => Container(
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: AppColors.border, width: 0.5),
+    ),
+    child: Row(children: [
+      Expanded(child: _ModeTab(
+        label: 'Denoise',
+        icon: Icons.noise_control_off_rounded,
+        selected: !_isSplitMode(prov),
+        onTap: () => prov.updateParams(prov.params.copyWith(mode: ProcessingMode.denoise)),
+      )),
+      Expanded(child: _ModeTab(
+        label: 'Split Vocals & Music',
+        icon: Icons.graphic_eq_rounded,
+        selected: _isSplitMode(prov),
+        onTap: () => prov.updateParams(prov.params.copyWith(mode: ProcessingMode.extractMusic)),
+      )),
+    ]),
+  );
+
+  Widget _stemsSection(AudioProvider prov) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.border, width: 0.5),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('VOCALS & INSTRUMENTAL',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                color: AppColors.textDim, letterSpacing: 1.0)),
+        const SizedBox(height: 14),
+        _stemRow(prov, label: 'Vocals', icon: Icons.mic_rounded,
+            playing: prov.playingVocals, onPlay: prov.togglePlayVocals,
+            onExport: () => _exportStem(prov, prov.vocalsPath, 'vocals')),
+        const SizedBox(height: 10),
+        _stemRow(prov, label: 'Instrumental', icon: Icons.music_note_rounded,
+            playing: prov.playingMusic, onPlay: prov.togglePlayMusic,
+            onExport: () => _exportStem(prov, prov.musicPath, 'instrumental')),
+      ],
+    ),
+  );
+
+  Widget _stemRow(AudioProvider prov, {
+    required String label,
+    required IconData icon,
+    required bool playing,
+    required VoidCallback onPlay,
+    required VoidCallback onExport,
+  }) {
+    return Row(children: [
+      Container(
+        width: 36, height: 36,
+        decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, size: 18, color: AppColors.textSec),
       ),
-      const SizedBox(height: 8),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: LinearProgressIndicator(
-          value: prov.progress,
-          minHeight: 4,
-          backgroundColor: AppColors.border,
-          valueColor: const AlwaysStoppedAnimation<Color>(AppColors.textPrim),
+      const SizedBox(width: 12),
+      Expanded(child: Text(label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrim))),
+      GestureDetector(
+        onTap: onPlay,
+        child: Container(
+          width: 34, height: 34,
+          decoration: const BoxDecoration(color: AppColors.textPrim, shape: BoxShape.circle),
+          child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              color: AppColors.white, size: 18),
         ),
       ),
-    ],
-  );
+      const SizedBox(width: 8),
+      GestureDetector(
+        onTap: onExport,
+        child: Container(
+          width: 34, height: 34,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(color: AppColors.border, width: 0.5),
+          ),
+          child: const Icon(Icons.ios_share_rounded, color: AppColors.textSec, size: 16),
+        ),
+      ),
+    ]);
+  }
+
+  Future<void> _exportStem(AudioProvider prov, String? path, String label) async {
+    if (path == null) return;
+    await prov.recordExport();
+    await SharePlus.instance.share(
+        ShareParams(files: [XFile(path)], text: 'NoiseClear — $label'));
+  }
+
+  Widget _progressBar(AudioProvider prov) {
+    final splitting = prov.isSplitting;
+    final value = splitting ? prov.splitProgress : prov.progress;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(splitting ? 'Separating vocals & music…' : 'Processing…',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSec)),
+            Text('${(value * 100).round()}%',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrim)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: value,
+            minHeight: 4,
+            backgroundColor: AppColors.border,
+            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.textPrim),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _bottomBar(BuildContext context, AudioProvider prov) {
     final isPro = context.watch<SubscriptionProvider>().isPro;
+    final isSplit = _isSplitMode(prov);
+    final busy = prov.isProcessing || prov.isSplitting;
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       decoration: const BoxDecoration(
@@ -277,19 +387,21 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
         children: [
           Expanded(
             child: _BigBtn(
-              label:   prov.isProcessing
+              label: busy
                   ? 'Processing…'
-                  : (isPro ? 'Isolate Voice' : 'Process'),
-              icon:    prov.isProcessing ? Icons.hourglass_empty_rounded : Icons.auto_fix_high_rounded,
-              filled:  true,
-              onTap:   prov.isProcessing ? null : () => prov.processAudio(premium: isPro),
-              child:   prov.isProcessing
+                  : (isSplit ? 'Split Vocals & Music' : (isPro ? 'Isolate Voice' : 'Process')),
+              icon: busy ? Icons.hourglass_empty_rounded : Icons.auto_fix_high_rounded,
+              filled: true,
+              onTap: busy
+                  ? null
+                  : () => isSplit ? prov.splitStems() : prov.processAudio(premium: isPro),
+              child: busy
                   ? const SizedBox(width: 18, height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white))
                   : null,
             ),
           ),
-          if (prov.processedAudio != null) ...[
+          if (!isSplit && prov.processedAudio != null) ...[
             const SizedBox(width: 10),
             _BigBtn(
               label: 'Export',
@@ -511,6 +623,46 @@ class _AdvancedParams extends StatelessWidget {
     child: Text(label,
         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
             color: AppColors.textDim, letterSpacing: 0.8)),
+  );
+}
+
+// ── Mode tab button ────────────────────────────────────────────────────────────
+
+class _ModeTab extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeTab({
+    required this.label, required this.icon,
+    required this.selected, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: selected ? AppColors.textPrim : Colors.transparent,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, size: 14, color: selected ? AppColors.white : AppColors.textSec),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(label,
+            style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w600,
+              color: selected ? AppColors.white : AppColors.textSec,
+            ),
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ]),
+    ),
   );
 }
 

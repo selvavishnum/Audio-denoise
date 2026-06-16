@@ -30,7 +30,7 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
   double   _progress    = 0.0;
   String?  _error;
   String   _statusMsg   = '';
-  _Engine  _engine      = _Engine.elevenLabs;
+  _Engine  _engine      = _Engine.onDevice;
 
   VideoPlayerController? _origCtrl;
   VideoPlayerController? _procCtrl;
