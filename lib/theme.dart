@@ -85,7 +85,7 @@ class AppTheme {
         ),
         margin: EdgeInsets.zero,
       ),
-      sliderTheme: SliderThemeData(
+      sliderTheme: const SliderThemeData(
         activeTrackColor:   AppColors.accent,
         inactiveTrackColor: AppColors.border,
         thumbColor:         AppColors.accent,
