@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme.dart';
+import '../widgets/sample_demo.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -121,7 +122,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            const SizedBox(height: 36),
+            const SizedBox(height: 20),
+
+            // Interactive sample — let new users hear the effect before starting
+            SizedBox(
+              height: 24,
+              child: _page == _slides.length - 1
+                  ? GestureDetector(
+                      onTap: () => showSampleDemo(context),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.play_circle_outline_rounded,
+                              size: 16, color: AppColors.textPrim),
+                          const SizedBox(width: 6),
+                          Text('Hear a sample',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrim,
+                                decoration: TextDecoration.underline,
+                                decorationColor: AppColors.textPrim,
+                              )),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+
+            const SizedBox(height: 16),
 
             // Next / Get Started
             Padding(

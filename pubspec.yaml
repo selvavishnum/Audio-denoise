@@ -64,3 +64,4 @@ flutter:
 
   assets:
     - assets/models/
+    - assets/demo/

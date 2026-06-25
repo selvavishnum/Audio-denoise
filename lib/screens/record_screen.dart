@@ -9,6 +9,7 @@ import '../models/audio_params.dart';
 import '../providers/audio_provider.dart';
 import '../theme.dart';
 import '../widgets/equalizer_painter.dart';
+import '../widgets/sample_demo.dart';
 
 class RecordScreen extends StatefulWidget {
   const RecordScreen({super.key});
@@ -100,12 +101,41 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
-  Widget _header(BuildContext context) => Column(
+  Widget _header(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text('Record', style: Theme.of(context).textTheme.displayLarge),
-      const SizedBox(height: 4),
-      Text('Live noise cancellation', style: Theme.of(context).textTheme.bodyMedium),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Record', style: Theme.of(context).textTheme.displayLarge),
+            const SizedBox(height: 4),
+            Text('Live noise cancellation',
+                style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      ),
+      GestureDetector(
+        onTap: () => showSampleDemo(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.border, width: 0.5),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: const [
+            Icon(Icons.play_circle_outline_rounded,
+                size: 15, color: AppColors.textPrim),
+            SizedBox(width: 5),
+            Text('Sample',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrim)),
+          ]),
+        ),
+      ),
     ],
   );
 
