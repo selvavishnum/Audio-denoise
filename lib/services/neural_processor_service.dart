@@ -50,9 +50,62 @@ class NeuralProcessorService {
     }
   }
 
+  // ── Segmenting driver — bounds isolate memory on long inputs ────────────────
+  //
+  // A multi-minute clip (e.g. a video's audio track) would otherwise allocate
+  // hundreds of MB of STFT frames (mags + phases + enhMags) at once and OOM the
+  // isolate. compute() then throws, denoise() returns null, and the caller
+  // silently falls back to the ORIGINAL noisy audio — which is exactly why
+  // "video noise removal does nothing" on longer clips. Here we denoise in
+  // fixed ~20 s segments and cross-fade the seams so memory stays flat
+  // regardless of total length.
+  static Float32List? denoiseSync(Float32List samples, int sampleRate) {
+    try {
+      final n = samples.length;
+      if (n < _nFft) return samples;
+
+      final int segLen = 20 * sampleRate; // ~20 s of audio processed at a time
+      // Short clips: process in a single pass (no seams, lowest latency).
+      if (n <= segLen + (segLen >> 2)) return _denoiseChunk(samples, sampleRate);
+
+      final int overlap = (sampleRate * 0.4).round(); // 0.4 s cross-fade seam
+      final out = Float32List(n);
+      int start = 0;
+      bool first = true;
+
+      while (start < n) {
+        final end = (start + segLen + overlap) < n ? start + segLen + overlap : n;
+        final seg = Float32List(end - start);
+        seg.setRange(0, end - start, samples, start);
+
+        final cleaned = _denoiseChunk(seg, sampleRate);
+        if (cleaned == null) return null;
+
+        final m = cleaned.length < end - start ? cleaned.length : end - start;
+        for (int i = 0; i < m; i++) {
+          final gi = start + i;
+          if (gi >= n) break;
+          if (!first && i < overlap) {
+            final w = i / overlap; // 0 → 1 fade-in of the new segment
+            out[gi] = out[gi] * (1.0 - w) + cleaned[i] * w;
+          } else {
+            out[gi] = cleaned[i];
+          }
+        }
+
+        first = false;
+        if (end >= n) break;
+        start += segLen;
+      }
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── Core algorithm — safe to call from any isolate ──────────────────────────
 
-  static Float32List? denoiseSync(Float32List samples, int sampleRate) {
+  static Float32List? _denoiseChunk(Float32List samples, int sampleRate) {
     try {
       // 1. Resample to 16 kHz for processing
       final wav = sampleRate == _modelRate
