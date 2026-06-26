@@ -100,11 +100,15 @@ class NeuralTtsService {
       client.close();
     }
 
-    // Extract on a background isolate so the UI stays responsive.
-    await compute(_extractTarBz2, [tmp.path, root.path]);
-
-    if (tmp.existsSync()) {
-      try { tmp.deleteSync(); } catch (_) {}
+    // Extract on a background isolate so the UI stays responsive. Always
+    // delete the downloaded archive afterwards — even if extraction throws —
+    // so a failed download doesn't leave a 28–63 MB temp file behind.
+    try {
+      await compute(_extractTarBz2, [tmp.path, root.path]);
+    } finally {
+      if (tmp.existsSync()) {
+        try { tmp.deleteSync(); } catch (_) {}
+      }
     }
 
     // Verify extraction produced the expected files.
@@ -189,7 +193,12 @@ void _extractTarBz2(List<String> args) {
   final archive    = TarDecoder().decodeBytes(tarBytes);
 
   for (final entry in archive) {
-    final outPath = '$destRoot/${entry.name}';
+    // Guard against path traversal (Zip-Slip): skip any entry that would
+    // escape destRoot. The archives are from a trusted GitHub release, but
+    // a malformed or tampered file must never write outside the model dir.
+    final name = entry.name.replaceAll('\\', '/');
+    if (name.startsWith('/') || name.split('/').contains('..')) continue;
+    final outPath = '$destRoot/$name';
     if (entry.isFile) {
       final f = File(outPath);
       f.parent.createSync(recursive: true);

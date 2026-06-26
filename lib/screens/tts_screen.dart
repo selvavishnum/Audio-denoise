@@ -160,6 +160,7 @@ class _TtsScreenState extends State<TtsScreen> {
     try {
       // Piper speed is inverse of length: higher speed = faster speech.
       final path = await _neural.synthesize(_neuralVoice, text, speed: _speed);
+      if (!mounted) return;
       if (path != null) {
         _speechPath = path;
         setState(() { _generating = false; _hasSpeech = true; });
@@ -170,7 +171,7 @@ class _TtsScreenState extends State<TtsScreen> {
         });
       }
     } catch (e) {
-      setState(() { _generating = false; _error = 'Neural TTS error: $e'; });
+      if (mounted) setState(() { _generating = false; _error = 'Neural TTS error: $e'; });
     }
   }
 
@@ -192,6 +193,7 @@ class _TtsScreenState extends State<TtsScreen> {
 
       final fileResult = await _tts.synthesizeToFile(text, path);
       final generated  = fileResult == 1 && await File(path).exists();
+      if (!mounted) return;
 
       if (generated) {
         _speechPath = path;
@@ -203,7 +205,7 @@ class _TtsScreenState extends State<TtsScreen> {
         await _tts.speak(text);
       }
     } catch (e) {
-      setState(() { _generating = false; _error = 'TTS error: $e'; });
+      if (mounted) setState(() { _generating = false; _error = 'TTS error: $e'; });
     }
   }
 
@@ -211,14 +213,14 @@ class _TtsScreenState extends State<TtsScreen> {
     if (_speechPath == null) return;
     if (_playing) {
       await _player.stop();
-      setState(() => _playing = false);
+      if (mounted) setState(() => _playing = false);
     } else {
       setState(() => _playing = true);
       try {
         await _player.setFilePath(_speechPath!);
         await _player.play();
       } catch (_) {}
-      setState(() => _playing = false);
+      if (mounted) setState(() => _playing = false);
     }
   }
 
