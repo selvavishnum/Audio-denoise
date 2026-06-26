@@ -61,6 +61,15 @@ android {
         pickFirst 'lib/armeabi-v7a/libtensorflowlite_jni.so'
         pickFirst 'lib/arm64-v8a/libtensorflowlite_jni.so'
         pickFirst 'lib/x86_64/libtensorflowlite_jni.so'
+
+        // sherpa_onnx (neural TTS) and onnxruntime-android (DeepFilter) each
+        // bundle their own libonnxruntime.so / libc++_shared.so. The native-lib
+        // merge runs over every ABI in the AARs (incl. x86) before abiFilters
+        // apply, so use a glob to keep the first copy for ALL ABIs. The neural
+        // TTS path links against sherpa's matching lib; DeepFilter's ONNX path
+        // is inactive until model weights are bundled in assets/models/.
+        pickFirst '**/libonnxruntime.so'
+        pickFirst '**/libc++_shared.so'
     }
 
     signingConfigs {

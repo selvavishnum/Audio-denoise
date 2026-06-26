@@ -54,6 +54,13 @@ dependencies:
   # Text-to-Speech (neural voices via device TTS engine)
   flutter_tts: ^4.2.0
 
+  # On-device neural TTS engine (Piper/VITS via ONNX Runtime, fully offline)
+  sherpa_onnx: ^1.13.3
+
+  # Model archive download + extraction (.tar.bz2 Piper voice packs)
+  archive: ^3.6.1
+  http: ^1.2.2
+
   # Neural denoising: DeepFilterNet2 runs via ONNX Runtime (native Android).
   # TFLite removed — incompatible with Flutter 3.44.x Dart SDK.
 

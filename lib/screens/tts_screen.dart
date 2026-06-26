@@ -7,10 +7,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/audio_provider.dart';
+import '../services/neural_tts_service.dart';
 import '../theme.dart';
 
 // Voice gender selection
 enum _VoiceGender { female, male }
+
+// Synthesis engine: on-device system TTS vs bundled neural (Piper/VITS) model
+enum _TtsEngine { device, neural }
 
 class TtsScreen extends StatefulWidget {
   const TtsScreen({super.key});
@@ -24,7 +28,9 @@ class _TtsScreenState extends State<TtsScreen> {
   final AudioPlayer _player    = AudioPlayer();
   final TextEditingController _ctrl = TextEditingController();
   final FocusNode _focus       = FocusNode();
+  final NeuralTtsService _neural = NeuralTtsService();
 
+  _TtsEngine _engine           = _TtsEngine.device;
   _VoiceGender _gender         = _VoiceGender.female;
   double _speed                = 0.9;   // 0.5 – 2.0
   double _pitch                = 1.0;   // 0.5 – 2.0
@@ -33,6 +39,14 @@ class _TtsScreenState extends State<TtsScreen> {
   bool _hasSpeech              = false;
   String? _speechPath;
   String? _error;
+
+  // Neural model download state
+  bool _neuralReady            = false;
+  bool _downloading            = false;
+  double _downloadProgress     = 0.0;
+
+  NeuralVoice get _neuralVoice =>
+      _gender == _VoiceGender.female ? NeuralVoice.female : NeuralVoice.male;
 
   // All available TTS voices fetched from the engine
   List<Map<String, String>> _allVoices = [];
@@ -102,7 +116,30 @@ class _TtsScreenState extends State<TtsScreen> {
     _player.dispose();
     _ctrl.dispose();
     _focus.dispose();
+    _neural.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshNeuralReady() async {
+    final ready = await _neural.isReady(_neuralVoice);
+    if (mounted) setState(() => _neuralReady = ready);
+  }
+
+  Future<void> _downloadNeural() async {
+    setState(() { _downloading = true; _downloadProgress = 0; _error = null; });
+    try {
+      await _neural.download(_neuralVoice, onProgress: (p) {
+        if (mounted) setState(() => _downloadProgress = p);
+      });
+      if (mounted) setState(() { _downloading = false; _neuralReady = true; });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+          _error = 'Download failed: $e';
+        });
+      }
+    }
   }
 
   Future<void> _generate() async {
@@ -112,6 +149,32 @@ class _TtsScreenState extends State<TtsScreen> {
 
     setState(() { _generating = true; _error = null; _hasSpeech = false; });
 
+    if (_engine == _TtsEngine.neural) {
+      await _generateNeural(text);
+    } else {
+      await _generateDevice(text);
+    }
+  }
+
+  Future<void> _generateNeural(String text) async {
+    try {
+      // Piper speed is inverse of length: higher speed = faster speech.
+      final path = await _neural.synthesize(_neuralVoice, text, speed: _speed);
+      if (path != null) {
+        _speechPath = path;
+        setState(() { _generating = false; _hasSpeech = true; });
+      } else {
+        setState(() {
+          _generating = false;
+          _error = 'Neural synthesis failed — the voice model may need to be re-downloaded.';
+        });
+      }
+    } catch (e) {
+      setState(() { _generating = false; _error = 'Neural TTS error: $e'; });
+    }
+  }
+
+  Future<void> _generateDevice(String text) async {
     try {
       // Apply gender-specific voice and pitch
       final voice = _gender == _VoiceGender.female ? _femaleVoice : _maleVoice;
@@ -183,14 +246,19 @@ class _TtsScreenState extends State<TtsScreen> {
             children: [
               const SizedBox(height: 28),
               _header(context),
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
+              _engineRow(),
+              const SizedBox(height: 16),
               _genderRow(),
               const SizedBox(height: 20),
               _textInput(),
               const SizedBox(height: 16),
               _sliders(),
               const SizedBox(height: 20),
-              _generateBtn(),
+              if (_engine == _TtsEngine.neural && !_neuralReady)
+                _downloadCard()
+              else
+                _generateBtn(),
               const SizedBox(height: 12),
               if (_error != null) _errorBadge(),
               if (_hasSpeech) ...[
@@ -217,23 +285,115 @@ class _TtsScreenState extends State<TtsScreen> {
     ],
   );
 
+  Widget _engineRow() => Row(
+    children: [
+      Expanded(child: _GenderChip(
+        label: 'Device',
+        icon: Icons.smartphone_rounded,
+        selected: _engine == _TtsEngine.device,
+        onTap: () => setState(() => _engine = _TtsEngine.device),
+      )),
+      const SizedBox(width: 12),
+      Expanded(child: _GenderChip(
+        label: 'Neural HD',
+        icon: Icons.auto_awesome_rounded,
+        selected: _engine == _TtsEngine.neural,
+        onTap: () async {
+          setState(() => _engine = _TtsEngine.neural);
+          await _refreshNeuralReady();
+        },
+      )),
+    ],
+  );
+
   Widget _genderRow() => Row(
     children: [
       Expanded(child: _GenderChip(
         label: 'Female',
         icon: Icons.person_2_outlined,
         selected: _gender == _VoiceGender.female,
-        onTap: () => setState(() => _gender = _VoiceGender.female),
+        onTap: () async {
+          setState(() => _gender = _VoiceGender.female);
+          if (_engine == _TtsEngine.neural) await _refreshNeuralReady();
+        },
       )),
       const SizedBox(width: 12),
       Expanded(child: _GenderChip(
         label: 'Male',
         icon: Icons.person_outlined,
         selected: _gender == _VoiceGender.male,
-        onTap: () => setState(() => _gender = _VoiceGender.male),
+        onTap: () async {
+          setState(() => _gender = _VoiceGender.male);
+          if (_engine == _TtsEngine.neural) await _refreshNeuralReady();
+        },
       )),
     ],
   );
+
+  Widget _downloadCard() {
+    final label = _neural.label(_neuralVoice);
+    final size  = _neural.size(_neuralVoice);
+    if (_downloading) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border, width: 0.5),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Downloading $label…',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                  color: AppColors.textPrim)),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _downloadProgress > 0 ? _downloadProgress : null,
+              minHeight: 6,
+              backgroundColor: AppColors.border,
+              valueColor: const AlwaysStoppedAnimation(AppColors.textPrim),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text('${(_downloadProgress * 100).toStringAsFixed(0)}%  ·  one-time download, then fully offline',
+              style: const TextStyle(fontSize: 11, color: AppColors.textSec)),
+        ]),
+      );
+    }
+    return GestureDetector(
+      onTap: _downloadNeural,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border, width: 0.5),
+        ),
+        child: Row(children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.textPrim,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.download_rounded, color: AppColors.white, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Download HD voice — $label',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                      color: AppColors.textPrim)),
+              const SizedBox(height: 2),
+              Text('$size · one-time · then 100% offline, no cloud',
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSec)),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
 
   Widget _textInput() => Container(
     decoration: BoxDecoration(
