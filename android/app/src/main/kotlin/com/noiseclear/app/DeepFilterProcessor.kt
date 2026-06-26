@@ -52,7 +52,13 @@ class DeepFilterProcessor(private val context: Context) {
         }
     }
 
-    private val ortEnv: OrtEnvironment = OrtEnvironment.getEnvironment()
+    // Lazy: do NOT touch ONNX Runtime until a model session is actually
+    // created. This avoids loading libonnxruntime.so at construction time —
+    // critical because sherpa_onnx (neural TTS) bundles its own copy of that
+    // native library, and eagerly loading Microsoft's ONNX JNI bridge against
+    // it crashes the app on startup. DeepFilter only loads ONNX once real
+    // .onnx weights exist in assets/models/ (see initialize()).
+    private val ortEnv: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
     private var encSess:    OrtSession? = null
     private var erbDecSess: OrtSession? = null
     private var dfDecSess:  OrtSession? = null
