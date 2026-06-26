@@ -60,7 +60,6 @@ class _TtsScreenState extends State<TtsScreen> {
       _allVoices = (raw as List)
           .map((v) => Map<String, String>.from(v as Map))
           .where((v) {
-            final name = (v['name'] ?? '').toLowerCase();
             final lang = (v['locale'] ?? '');
             return lang.startsWith('en');
           })
@@ -248,11 +247,11 @@ class _TtsScreenState extends State<TtsScreen> {
       maxLines: 7,
       minLines: 5,
       style: const TextStyle(fontSize: 14, color: AppColors.textPrim, height: 1.55),
-      decoration: InputDecoration(
+      decoration: const InputDecoration(
         hintText: _placeholder,
-        hintStyle: const TextStyle(fontSize: 13, color: AppColors.textDim, height: 1.55),
+        hintStyle: TextStyle(fontSize: 13, color: AppColors.textDim, height: 1.55),
         border: InputBorder.none,
-        contentPadding: const EdgeInsets.all(16),
+        contentPadding: EdgeInsets.all(16),
       ),
     ),
   );
