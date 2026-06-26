@@ -16,7 +16,10 @@ class MainActivity : FlutterActivity() {
     }
 
     private val videoProcessor   = VideoAudioProcessor()
-    private val deepFilter       = DeepFilterProcessor(this)
+    // Lazy: DeepFilterProcessor's construction loads ONNX Runtime. Defer it
+    // until a DeepFilter method is actually invoked so nothing touches
+    // libonnxruntime.so at app startup (sherpa_onnx ships its own copy).
+    private val deepFilter       by lazy { DeepFilterProcessor(this) }
     private val neuralProcessor  = NeuralNoiseProcessor()
     private val handler          = Handler(Looper.getMainLooper())
 
