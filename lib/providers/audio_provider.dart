@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -13,6 +14,8 @@ import '../models/audio_params.dart';
 import '../models/processing_stats.dart';
 import '../services/processor_service.dart';
 import '../services/stem_separator_service.dart';
+
+const _videoChannel = MethodChannel('com.noiseclear.app/video');
 
 class AudioProvider extends ChangeNotifier {
   AudioData? originalAudio;
@@ -191,8 +194,21 @@ class AudioProvider extends ChangeNotifier {
   }
 
   Future<AudioData?> _convertToWavAndDecode(String inputPath) async {
-    // FFmpeg-kit is not bundled; non-WAV formats are not supported.
-    return null;
+    try {
+      final dir     = await getTemporaryDirectory();
+      final outPath = '${dir.path}/import_${_uuid.v4()}.wav';
+      final ok = await _videoChannel.invokeMethod<bool>(
+        'extractAudioToWav',
+        {'videoPath': inputPath, 'outputPath': outPath},
+      );
+      if (ok != true) return null;
+      final bytes = await File(outPath).readAsBytes();
+      final data  = ProcessorService.decodeWav(bytes);
+      File(outPath).deleteSync();
+      return data;
+    } catch (_) {
+      return null;
+    }
   }
 
   // ── Recording ────────────────────────────────────────────────────────

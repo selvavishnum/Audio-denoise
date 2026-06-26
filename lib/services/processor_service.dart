@@ -70,7 +70,7 @@ class ProcessorService {
         dataSize   = chunkSize;
         break;
       }
-      offset += 8 + chunkSize;
+      offset += 8 + chunkSize + (chunkSize & 1); // WAV chunks are word-aligned
     }
 
     if (dataOffset < 0 || dataOffset + dataSize > bytes.length) return null;

@@ -45,9 +45,21 @@ class _HomeScreenState extends State<HomeScreen>
     );
     if (result == null || result.files.isEmpty) return;
     final path = result.files.first.path;
-    if (path == null) return;
+    if (path == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not read file — try copying it to device storage first')),
+        );
+      }
+      return;
+    }
     _showProcessed = false;
     await prov.loadFile(path);
+    if (prov.errorMessage != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(prov.errorMessage!)),
+      );
+    }
   }
 
   // ── Record ───────────────────────────────────────────────────────────

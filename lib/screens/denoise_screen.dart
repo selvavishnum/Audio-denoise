@@ -427,9 +427,22 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
       type: FileType.custom,
       allowedExtensions: ['wav', 'mp3', 'm4a', 'aac', 'flac', 'ogg'],
     );
-    if (result != null && result.files.single.path != null) {
-      setState(() => _showProcessed = false);
-      await prov.loadFile(result.files.single.path!);
+    if (result == null || result.files.isEmpty) return;
+    final path = result.files.single.path;
+    if (path == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not read file — try copying it to device storage first')),
+        );
+      }
+      return;
+    }
+    setState(() => _showProcessed = false);
+    await prov.loadFile(path);
+    if (prov.errorMessage != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(prov.errorMessage!)),
+      );
     }
   }
 
