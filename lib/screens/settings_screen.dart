@@ -8,6 +8,7 @@ import '../providers/auth_provider.dart';
 import '../providers/subscription_provider.dart';
 import '../services/deepfilter_service.dart';
 import '../theme.dart';
+import 'legal_screen.dart';
 import 'paywall_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -31,6 +32,7 @@ class SettingsScreen extends StatelessWidget {
             _section(context, 'Default Preset', _presetSelector(context)),
             _section(context, 'AI Engine', _engineToggles(context, prov)),
             _section(context, 'About', _about(context)),
+            _section(context, 'Legal', _legal(context)),
             if (prov.recentFiles.isNotEmpty)
               _section(context, 'Recent Files', _historyList(prov)),
             const SizedBox(height: 40),
@@ -329,6 +331,52 @@ class SettingsScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _legal(BuildContext context) {
+    void open(String title, String asset) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LegalScreen(title: title, assetPath: asset),
+        ),
+      );
+    }
+
+    return Column(children: [
+      GestureDetector(
+        onTap: () => open('Privacy Policy', 'assets/legal/privacy_policy.md'),
+        child: _SettingsRow(
+          icon: Icons.privacy_tip_outlined,
+          title: 'Privacy Policy',
+          subtitle: 'How we handle your data',
+          trailing: const Icon(Icons.chevron_right_rounded,
+              size: 20, color: AppColors.textDim),
+        ),
+      ),
+      const Divider(height: 0, indent: 56, color: AppColors.border, thickness: 0.5),
+      GestureDetector(
+        onTap: () => open('Terms of Service', 'assets/legal/terms_of_service.md'),
+        child: _SettingsRow(
+          icon: Icons.gavel_rounded,
+          title: 'Terms of Service',
+          subtitle: 'Your rights and responsibilities',
+          trailing: const Icon(Icons.chevron_right_rounded,
+              size: 20, color: AppColors.textDim),
+        ),
+      ),
+      const Divider(height: 0, indent: 56, color: AppColors.border, thickness: 0.5),
+      GestureDetector(
+        onTap: () => open('Disclaimer', 'assets/legal/disclaimer.md'),
+        child: _SettingsRow(
+          icon: Icons.warning_amber_rounded,
+          title: 'Disclaimer',
+          subtitle: 'App limitations and liability',
+          trailing: const Icon(Icons.chevron_right_rounded,
+              size: 20, color: AppColors.textDim),
+        ),
+      ),
+    ]);
   }
 
   Widget _historyList(AudioProvider prov) {
