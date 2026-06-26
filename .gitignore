@@ -60,3 +60,6 @@ android/*.jks
 android/*.keystore
 android/app/*.jks
 android/app/*.keystore
+
+# transient legal-docs workflow output (harvested into assets/legal, then removed)
+/undefined/
