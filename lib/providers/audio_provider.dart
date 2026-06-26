@@ -93,6 +93,32 @@ class AudioProvider extends ChangeNotifier {
 
   AudioProvider() {
     _init();
+    // Subscribe to each player's completion ONCE here, not on every playback
+    // toggle — otherwise a fresh listener accumulates with each tap and leaks.
+    _origPlayer.playerStateStream.listen((s) {
+      if (s.processingState == ProcessingState.completed && _playingOrig) {
+        _playingOrig = false;
+        notifyListeners();
+      }
+    });
+    _procPlayer.playerStateStream.listen((s) {
+      if (s.processingState == ProcessingState.completed && _playingProc) {
+        _playingProc = false;
+        notifyListeners();
+      }
+    });
+    _vocalsPlayer.playerStateStream.listen((s) {
+      if (s.processingState == ProcessingState.completed && _playingVocals) {
+        _playingVocals = false;
+        notifyListeners();
+      }
+    });
+    _musicPlayer.playerStateStream.listen((s) {
+      if (s.processingState == ProcessingState.completed && _playingMusic) {
+        _playingMusic = false;
+        notifyListeners();
+      }
+    });
   }
 
   Future<void> _init() async {
@@ -399,12 +425,6 @@ class AudioProvider extends ChangeNotifier {
       await _origPlayer.setFilePath(originalPath!);
       await _origPlayer.play();
       _playingOrig = true;
-      _origPlayer.playerStateStream.listen((s) {
-        if (s.processingState == ProcessingState.completed) {
-          _playingOrig = false;
-          notifyListeners();
-        }
-      });
     }
     notifyListeners();
   }
@@ -423,12 +443,6 @@ class AudioProvider extends ChangeNotifier {
       await _procPlayer.setFilePath(processedPath!);
       await _procPlayer.play();
       _playingProc = true;
-      _procPlayer.playerStateStream.listen((s) {
-        if (s.processingState == ProcessingState.completed) {
-          _playingProc = false;
-          notifyListeners();
-        }
-      });
     }
     notifyListeners();
   }
@@ -447,12 +461,6 @@ class AudioProvider extends ChangeNotifier {
       await _vocalsPlayer.setFilePath(vocalsPath!);
       await _vocalsPlayer.play();
       _playingVocals = true;
-      _vocalsPlayer.playerStateStream.listen((s) {
-        if (s.processingState == ProcessingState.completed) {
-          _playingVocals = false;
-          notifyListeners();
-        }
-      });
     }
     notifyListeners();
   }
@@ -471,12 +479,6 @@ class AudioProvider extends ChangeNotifier {
       await _musicPlayer.setFilePath(musicPath!);
       await _musicPlayer.play();
       _playingMusic = true;
-      _musicPlayer.playerStateStream.listen((s) {
-        if (s.processingState == ProcessingState.completed) {
-          _playingMusic = false;
-          notifyListeners();
-        }
-      });
     }
     notifyListeners();
   }

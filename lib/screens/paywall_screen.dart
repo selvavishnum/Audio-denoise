@@ -60,6 +60,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
     final packages = sub.packages;
     final plans    = _resolvePlans(packages);
+    // Guard against the default selection (1) exceeding a shorter plan list —
+    // e.g. when only one package type is configured in RevenueCat.
+    final selIdx   = _selectedIndex < plans.length ? _selectedIndex : 0;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -166,7 +169,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Text(
-                            auth.isLoggedIn ? 'Subscribe — ${plans[_selectedIndex].price}' : 'Continue with Google',
+                            auth.isLoggedIn ? 'Subscribe — ${plans[selIdx].price}' : 'Continue with Google',
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.white),
@@ -213,7 +216,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
   ) async {
     setState(() => _loading = true);
 
-    await AnalyticsService.logPlanSelected(plans[_selectedIndex].id);
+    final selIdx = _selectedIndex < plans.length ? _selectedIndex : 0;
+    await AnalyticsService.logPlanSelected(plans[selIdx].id);
 
     if (!auth.isLoggedIn) {
       final ok = await auth.signInWithGoogle();
