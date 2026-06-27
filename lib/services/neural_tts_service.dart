@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
@@ -126,24 +127,81 @@ class NeuralTtsService {
 
   /// Synthesize [text] with the given voice to a WAV file. Returns the file
   /// path, or null if the model isn't ready or synthesis fails.
+  ///
+  /// Long text is split into sentence-sized chunks and synthesized one chunk
+  /// at a time, yielding to the event loop between chunks. generate() is a
+  /// synchronous native call, so a whole paragraph in one call would block the
+  /// UI thread for many seconds and trigger an ANR/crash — chunking keeps each
+  /// call short and the app responsive. [onProgress] reports 0..1.
   Future<String?> synthesize(
     NeuralVoice v,
     String text, {
     double speed = 1.0,
+    void Function(double)? onProgress,
   }) async {
     if (text.trim().isEmpty) return null;
     final engine = await _engine(v);
     if (engine == null) return null;
 
-    final audio = engine.generate(text: text, sid: 0, speed: speed);
-    final docs  = await getApplicationDocumentsDirectory();
-    final path  = '${docs.path}/neural_tts_${DateTime.now().millisecondsSinceEpoch}.wav';
+    final chunks = _splitIntoChunks(text, 200);
+    final all = <double>[];
+    int sampleRate = 22050;
+
+    for (int i = 0; i < chunks.length; i++) {
+      final audio = engine.generate(text: chunks[i], sid: 0, speed: speed);
+      sampleRate = audio.sampleRate;
+      all.addAll(audio.samples);
+      onProgress?.call((i + 1) / chunks.length);
+      // Let the UI repaint / breathe between chunks so we never ANR.
+      await Future<void>.delayed(Duration.zero);
+    }
+    if (all.isEmpty) return null;
+
+    final docs = await getApplicationDocumentsDirectory();
+    final path = '${docs.path}/neural_tts_${DateTime.now().millisecondsSinceEpoch}.wav';
     final ok = sherpa_onnx.writeWave(
       filename: path,
-      samples: audio.samples,
-      sampleRate: audio.sampleRate,
+      samples: Float32List.fromList(all),
+      sampleRate: sampleRate,
     );
     return ok ? path : null;
+  }
+
+  /// Split text into chunks no longer than [maxLen] characters, breaking on
+  /// sentence boundaries where possible and on word boundaries for any single
+  /// sentence longer than [maxLen].
+  static List<String> _splitIntoChunks(String text, int maxLen) {
+    final sentences = text.split(RegExp(r'(?<=[.!?])\s+'));
+    final chunks = <String>[];
+    final buf = StringBuffer();
+
+    void flush() {
+      final s = buf.toString().trim();
+      if (s.isNotEmpty) chunks.add(s);
+      buf.clear();
+    }
+
+    for (final raw in sentences) {
+      final s = raw.trim();
+      if (s.isEmpty) continue;
+      if (s.length > maxLen) {
+        flush();
+        final wb = StringBuffer();
+        for (final w in s.split(RegExp(r'\s+'))) {
+          if (wb.isNotEmpty && wb.length + w.length + 1 > maxLen) {
+            chunks.add(wb.toString().trim());
+            wb.clear();
+          }
+          wb.write('$w ');
+        }
+        if (wb.isNotEmpty) chunks.add(wb.toString().trim());
+      } else {
+        if (buf.isNotEmpty && buf.length + s.length + 1 > maxLen) flush();
+        buf.write('$s ');
+      }
+    }
+    flush();
+    return chunks.isEmpty ? [text.trim()] : chunks;
   }
 
   Future<sherpa_onnx.OfflineTts?> _engine(NeuralVoice v) async {

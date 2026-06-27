@@ -5,6 +5,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../providers/audio_provider.dart';
 import '../services/neural_tts_service.dart';
@@ -231,9 +232,27 @@ class _TtsScreenState extends State<TtsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Voice loaded — open the Denoise tab to process it'),
+        content: Text('Voice loaded — open the denoise tab to process it'),
       ),
     );
+  }
+
+  Future<void> _saveVoice() async {
+    if (_speechPath == null) return;
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(_speechPath!)],
+          text: 'Generated with NoiseClear',
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share audio: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -241,12 +260,14 @@ class _TtsScreenState extends State<TtsScreen> {
     return GestureDetector(
       onTap: () => _focus.unfocus(),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+        // Scrollable so the page works on small screens and the Preview /
+        // action buttons are always reachable (and the keyboard never clips
+        // the content).
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 28),
               _header(context),
               const SizedBox(height: 24),
               _engineRow(),
@@ -266,10 +287,9 @@ class _TtsScreenState extends State<TtsScreen> {
               if (_hasSpeech) ...[
                 const SizedBox(height: 16),
                 _playbackRow(),
+                const SizedBox(height: 16),
+                _actionRow(),
               ],
-              const Spacer(),
-              if (_hasSpeech) _actionRow(),
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -524,24 +544,34 @@ class _TtsScreenState extends State<TtsScreen> {
     ]),
   );
 
-  Widget _actionRow() => Row(children: [
-    Expanded(
-      child: _ActionBtn(
-        label: 'Denoise Voice',
-        icon: Icons.graphic_eq_rounded,
-        filled: true,
-        onTap: _sendToDenoise,
-      ),
+  Widget _actionRow() => Column(children: [
+    // Primary: save / download / share the generated audio file.
+    _ActionBtn(
+      label: 'Save / Share Audio',
+      icon: Icons.download_rounded,
+      filled: true,
+      onTap: _saveVoice,
     ),
-    const SizedBox(width: 12),
-    Expanded(
-      child: _ActionBtn(
-        label: 'Regenerate',
-        icon: Icons.refresh_rounded,
-        filled: false,
-        onTap: _generate,
+    const SizedBox(height: 12),
+    Row(children: [
+      Expanded(
+        child: _ActionBtn(
+          label: 'Denoise',
+          icon: Icons.graphic_eq_rounded,
+          filled: false,
+          onTap: _sendToDenoise,
+        ),
       ),
-    ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: _ActionBtn(
+          label: 'Regenerate',
+          icon: Icons.refresh_rounded,
+          filled: false,
+          onTap: _generate,
+        ),
+      ),
+    ]),
   ]);
 }
 
