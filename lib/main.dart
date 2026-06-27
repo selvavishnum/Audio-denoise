@@ -18,6 +18,7 @@ import 'screens/edit_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/ad_service.dart';
 import 'services/deepfilter_service.dart';
+import 'services/neural_denoiser_service.dart';
 import 'theme.dart';
 
 void main() async {
@@ -42,6 +43,9 @@ void main() async {
 
   // DeepFilterNet2 (ONNX) — neural denoiser; falls back to DSP if models absent.
   unawaited(DeepFilterService.initialize());
+
+  // GTCRN neural speech denoiser (bundled model) — primary on-device engine.
+  unawaited(NeuralDenoiserService.initialize());
 
   runApp(const NoiseClearApp());
 }

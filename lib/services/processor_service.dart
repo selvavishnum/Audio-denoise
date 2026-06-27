@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../models/audio_params.dart';
 import 'deepfilter_service.dart';
+import 'neural_denoiser_service.dart';
 import 'neural_processor_service.dart';
 
 /// Audio processing pipeline — always produces denoised output.
@@ -23,12 +24,20 @@ class ProcessorService {
   }) async {
     onProgress?.call(0.05);
 
-    // ── Try the best available NATIVE neural engine first ─────────────────────
-    // DeepFilterNet3 ONNX when its model files are bundled, otherwise the
-    // built-in Kotlin OMLSA-IMCRA neural processor (no model files required).
+    // ── 1. Genuine NEURAL denoiser (GTCRN, bundled ~0.5 MB ONNX model) ────────
+    // A real trained neural network, run via sherpa_onnx/ONNX Runtime over FFI
+    // (no model download, no fragile MethodChannel PCM transfer). This is the
+    // primary engine and reports as "Neural AI".
+    final neural = await NeuralDenoiserService.denoise(input.samples, input.sampleRate);
+    if (neural != null && neural.isNotEmpty) {
+      lastUsedNeural = true;
+      onProgress?.call(1.0);
+      return AudioData.fromSamples(neural, input.sampleRate);
+    }
+
+    // ── 2. Native Kotlin engines (DeepFilterNet3 ONNX or built-in OMLSA) ──────
     // Gate on hasAnyEngine — NOT isReady — so the built-in processor is used
-    // when ONNX weights are absent, instead of dropping straight to the weak
-    // Dart fallback. (DeepFilterService.denoise() picks the right one.)
+    // when ONNX weights are absent. (DeepFilterService.denoise() picks one.)
     if (DeepFilterService.hasAnyEngine) {
       final cleaned = await DeepFilterService.denoise(
         input.samples, input.sampleRate,
@@ -41,7 +50,7 @@ class ProcessorService {
       }
     }
 
-    // ── Last-resort fallback: Dart MMSE-STSA in a compute() isolate ───────────
+    // ── 3. Last-resort fallback: Dart MMSE-STSA in a compute() isolate ────────
     // Always runs — no model files, no MethodChannel, no data-transfer overhead.
     // Two-pass Log-MMSE with MCRA noise tracking: 65–85 % noise reduction.
     lastUsedNeural = false;
