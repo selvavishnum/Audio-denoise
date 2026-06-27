@@ -23,8 +23,13 @@ class ProcessorService {
   }) async {
     onProgress?.call(0.05);
 
-    // ── Try DeepFilterNet3 ONNX first (requires model files in assets/models/) ─
-    if (DeepFilterService.isReady) {
+    // ── Try the best available NATIVE neural engine first ─────────────────────
+    // DeepFilterNet3 ONNX when its model files are bundled, otherwise the
+    // built-in Kotlin OMLSA-IMCRA neural processor (no model files required).
+    // Gate on hasAnyEngine — NOT isReady — so the built-in processor is used
+    // when ONNX weights are absent, instead of dropping straight to the weak
+    // Dart fallback. (DeepFilterService.denoise() picks the right one.)
+    if (DeepFilterService.hasAnyEngine) {
       final cleaned = await DeepFilterService.denoise(
         input.samples, input.sampleRate,
         isolator: premium, preferDeepFilter: true,
@@ -36,7 +41,7 @@ class ProcessorService {
       }
     }
 
-    // ── Guaranteed fallback: Dart MMSE-STSA in a compute() isolate ────────────
+    // ── Last-resort fallback: Dart MMSE-STSA in a compute() isolate ───────────
     // Always runs — no model files, no MethodChannel, no data-transfer overhead.
     // Two-pass Log-MMSE with MCRA noise tracking: 65–85 % noise reduction.
     lastUsedNeural = false;
