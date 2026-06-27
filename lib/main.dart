@@ -11,7 +11,6 @@ import 'providers/audio_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/subscription_provider.dart';
 import 'screens/onboarding_screen.dart';
-import 'screens/record_screen.dart';
 import 'screens/denoise_screen.dart';
 import 'screens/video_denoise_screen.dart';
 import 'screens/tts_screen.dart';
@@ -104,8 +103,9 @@ class RootShell extends StatefulWidget {
 class _RootShellState extends State<RootShell> {
   int _index = 0;
 
+  // Record and Denoise are merged into a single Studio tab (DenoiseScreen
+  // now records live OR imports a file, then denoises).
   static const _screens = <Widget>[
-    RecordScreen(),
     DenoiseScreen(),
     VideoDenoiseScreen(),
     TtsScreen(),
@@ -147,12 +147,11 @@ class _BottomNav extends StatelessWidget {
           height: 60,
           child: Row(
             children: [
-              _NavItem(icon: Icons.mic_none_rounded,          activeIcon: Icons.mic_rounded,              label: 'Record',   index: 0, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.graphic_eq_outlined,       activeIcon: Icons.graphic_eq,               label: 'Denoise',  index: 1, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.videocam_outlined,         activeIcon: Icons.videocam_rounded,         label: 'Video',    index: 2, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.record_voice_over_outlined, activeIcon: Icons.record_voice_over_rounded, label: 'Voice',  index: 3, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.content_cut_rounded,       activeIcon: Icons.content_cut_rounded,      label: 'Editor',   index: 4, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.settings_outlined,         activeIcon: Icons.settings_rounded,         label: 'Settings', index: 5, current: currentIndex, onTap: onTap),
+              _NavItem(icon: Icons.graphic_eq_outlined,       activeIcon: Icons.graphic_eq,               label: 'Studio',   index: 0, current: currentIndex, onTap: onTap),
+              _NavItem(icon: Icons.videocam_outlined,         activeIcon: Icons.videocam_rounded,         label: 'Video',    index: 1, current: currentIndex, onTap: onTap),
+              _NavItem(icon: Icons.record_voice_over_outlined, activeIcon: Icons.record_voice_over_rounded, label: 'Voice',  index: 2, current: currentIndex, onTap: onTap),
+              _NavItem(icon: Icons.content_cut_rounded,       activeIcon: Icons.content_cut_rounded,      label: 'Editor',   index: 3, current: currentIndex, onTap: onTap),
+              _NavItem(icon: Icons.settings_outlined,         activeIcon: Icons.settings_rounded,         label: 'Settings', index: 4, current: currentIndex, onTap: onTap),
             ],
           ),
         ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -26,6 +28,41 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   bool _showProcessed = false;
   bool _advancedOpen  = false;
 
+  // ── Recording (merged Record + Denoise) ──────────────────────────────────
+  Timer? _recTimer;
+  int _recSeconds = 0;
+
+  @override
+  void dispose() {
+    _recTimer?.cancel();
+    super.dispose();
+  }
+
+  String _fmtRec(int s) =>
+      '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
+
+  Future<void> _toggleRecord(AudioProvider prov) async {
+    if (prov.isRecording) {
+      await prov.stopRecording();
+      _recTimer?.cancel();
+      if (mounted) setState(() => _recSeconds = 0);
+    } else {
+      final ok = await prov.startRecording();
+      if (!ok) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission required')),
+          );
+        }
+        return;
+      }
+      _recSeconds = 0;
+      _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() => _recSeconds++);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<AudioProvider>();
@@ -43,7 +80,7 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
                   const SizedBox(height: 16),
                   if (prov.originalAudio != null) _modeSelector(prov),
                   const SizedBox(height: 8),
-                  if (prov.originalAudio == null) _importCta(context, prov),
+                  if (prov.originalAudio == null) _recordOrImport(context, prov),
                   if (prov.originalAudio != null) ...[
                     _waveform(prov),
                     const SizedBox(height: 16),
@@ -90,9 +127,10 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Denoise', style: Theme.of(context).textTheme.displayLarge),
+            Text('Studio', style: Theme.of(context).textTheme.displayLarge),
             const SizedBox(height: 4),
-            Text('Import audio and remove noise', style: Theme.of(context).textTheme.bodyMedium),
+            Text('Record or import, then remove noise',
+                style: Theme.of(context).textTheme.bodyMedium),
           ],
         )),
         _buildExportBadge(context, prov),
@@ -100,36 +138,80 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
     );
   }
 
-  Widget _importCta(BuildContext context, AudioProvider prov) {
-    return GestureDetector(
-      onTap: () => _importFile(prov),
-      child: Container(
-        width: double.infinity,
-        height: 200,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.border, width: 0.5),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+  /// Combined entry point: record live OR upload a file. Shown on the first
+  /// page before any audio is loaded. While recording, this becomes a live
+  /// timer + stop control.
+  Widget _recordOrImport(BuildContext context, AudioProvider prov) {
+    if (prov.isRecording) return _recordingCard(prov);
+    return Column(
+      children: [
+        Row(
           children: [
-            Container(
-              width: 56, height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.textPrim,
-                borderRadius: BorderRadius.circular(16),
+            Expanded(
+              child: _EntryCard(
+                icon: Icons.mic_rounded,
+                title: 'Record',
+                subtitle: 'Live capture',
+                filled: true,
+                onTap: () => _toggleRecord(prov),
               ),
-              child: const Icon(Icons.upload_file_rounded, color: AppColors.white, size: 26),
             ),
-            const SizedBox(height: 16),
-            const Text('Import Audio File',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrim)),
-            const SizedBox(height: 6),
-            const Text('WAV, MP3, M4A, FLAC',
-                style: TextStyle(fontSize: 12, color: AppColors.textDim)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _EntryCard(
+                icon: Icons.upload_file_rounded,
+                title: 'Upload',
+                subtitle: 'WAV · MP3 · M4A',
+                filled: false,
+                onTap: () => _importFile(prov),
+              ),
+            ),
           ],
         ),
+        const SizedBox(height: 12),
+        const Text(
+          'Record a voice note or upload a file, then remove noise on-device.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12, color: AppColors.textDim),
+        ),
+      ],
+    );
+  }
+
+  Widget _recordingCard(AudioProvider prov) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.danger, width: 1),
+      ),
+      child: Column(
+        children: [
+          Text(
+            _fmtRec(_recSeconds),
+            style: const TextStyle(
+              fontSize: 44, fontWeight: FontWeight.w200,
+              color: AppColors.textPrim, letterSpacing: 4,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text('Recording — noise cancellation active',
+              style: TextStyle(fontSize: 12, color: AppColors.danger)),
+          const SizedBox(height: 18),
+          GestureDetector(
+            onTap: () => _toggleRecord(prov),
+            child: Container(
+              width: 64, height: 64,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle, color: AppColors.danger,
+              ),
+              child: const Icon(Icons.stop_rounded, color: AppColors.white, size: 28),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -756,6 +838,63 @@ class _BigBtn extends StatelessWidget {
               fontSize: 13, fontWeight: FontWeight.w600,
               color: filled ? AppColors.white : AppColors.textSec,
             )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Record / Upload entry card (first-page empty state) ───────────────────────
+
+class _EntryCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool filled;
+  final VoidCallback onTap;
+
+  const _EntryCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.filled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 150,
+        decoration: BoxDecoration(
+          color: filled ? AppColors.textPrim : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: filled ? null : Border.all(color: AppColors.border, width: 0.5),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 52, height: 52,
+              decoration: BoxDecoration(
+                color: filled ? AppColors.white : AppColors.textPrim,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(icon, size: 24,
+                  color: filled ? AppColors.textPrim : AppColors.white),
+            ),
+            const SizedBox(height: 14),
+            Text(title,
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700,
+                    color: filled ? AppColors.white : AppColors.textPrim)),
+            const SizedBox(height: 4),
+            Text(subtitle,
+                style: TextStyle(
+                    fontSize: 11,
+                    color: filled ? AppColors.white.withValues(alpha: 0.7) : AppColors.textDim)),
           ],
         ),
       ),
