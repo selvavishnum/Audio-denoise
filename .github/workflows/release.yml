@@ -119,6 +119,32 @@ jobs:
           path: build/app/outputs/flutter-apk/NoiseClear-*.apk
           retention-days: 90
 
+      # ── Build AAB (Android App Bundle) — THIS is what Play Store needs ─
+      # Google Play only accepts .aab uploads. It is signed with the same
+      # upload key (key.properties → signingConfigs.release). If the signing
+      # secrets are absent it is debug-signed and Play Console will REJECT it,
+      # so the four secrets above are mandatory for a real Play Store upload.
+      - name: Build release AAB
+        run: |
+          flutter build appbundle --release \
+            --build-name="${{ steps.ver.outputs.name }}" \
+            --build-number="${{ steps.ver.outputs.code }}" \
+            --dart-define="ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL || 'selvavishnu.m@gmail.com' }}"
+
+      # ── Rename AAB ────────────────────────────────────────────────────
+      - name: Rename AAB
+        run: |
+          mv build/app/outputs/bundle/release/app-release.aab \
+             build/app/outputs/bundle/release/NoiseClear-${{ steps.ver.outputs.name }}.aab
+
+      # ── Upload AAB artifact (download this, upload to Play Console) ────
+      - name: Upload release AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoiseClear-${{ steps.ver.outputs.name }}-aab
+          path: build/app/outputs/bundle/release/NoiseClear-*.aab
+          retention-days: 90
+
       # ── GitHub Release (on tag push OR manual dispatch) ───────────────
       # On manual dispatch the tag does not yet exist; action-gh-release
       # creates it at the checked-out commit (target_commitish).
@@ -132,7 +158,14 @@ jobs:
           body: |
             ## NoiseClear ${{ steps.ver.outputs.tag }}
 
-            ### Install
+            ### Play Store (recommended)
+            Upload **NoiseClear-${{ steps.ver.outputs.name }}.aab** to
+            Play Console → your app → Production (or Internal testing) →
+            Create new release → upload the `.aab`. Google Play re-signs it
+            with App Signing. Version code: **${{ steps.ver.outputs.code }}**
+            (must be higher than the previous upload).
+
+            ### Sideload / direct install (testing)
             1. Download **NoiseClear-${{ steps.ver.outputs.name }}.apk** below.
             2. On your Android device: **Settings → Apps → Install unknown apps** → allow your browser/file manager.
             3. Open the downloaded APK and tap **Install**.
@@ -142,7 +175,9 @@ jobs:
             ---
             *Full changelog generated from commits since the last release.*
           generate_release_notes: true
-          files: build/app/outputs/flutter-apk/NoiseClear-*.apk
+          files: |
+            build/app/outputs/flutter-apk/NoiseClear-*.apk
+            build/app/outputs/bundle/release/NoiseClear-*.aab
           draft: false
           prerelease: false
         env:
