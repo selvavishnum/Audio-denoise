@@ -24,15 +24,14 @@ class ProcessorService {
   }) async {
     onProgress?.call(0.05);
 
-    // ── 1. MAX NEURAL CASCADE — maximum noise removal ─────────────────────────
+    // ── 1. NEURAL CASCADE — strong removal, natural voice ─────────────────────
     // A genuine trained neural network (GTCRN) run via sherpa_onnx/ONNX Runtime
-    // over FFI. For the strongest possible result we run it TWICE (the second
-    // pass strips residual crowd / fan / TV noise the first pass left), then
-    // finish with an aggressive DSP polish (MMSE spectral suppression + voice-
-    // band focus) to gate the remaining noise floor. Trades a few extra seconds
-    // for markedly cleaner voice. Reports as "Neural AI".
+    // over FFI (single pass — one pass keeps the voice natural; a second neural
+    // pass over-processes and sounds robotic), finished with an aggressive DSP
+    // polish (MMSE spectral suppression + voice-band focus) to gate the
+    // remaining noise floor. Reports as "Neural AI".
     final neural = await NeuralDenoiserService.denoise(
-        input.samples, input.sampleRate, passes: 2);
+        input.samples, input.sampleRate, passes: 1);
     if (neural != null && neural.isNotEmpty) {
       onProgress?.call(0.7);
       // Polish pass: gate residual noise + focus the speech band.
