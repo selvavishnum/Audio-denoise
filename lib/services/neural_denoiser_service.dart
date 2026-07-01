@@ -63,36 +63,51 @@ class NeuralDenoiserService {
   }
 
   /// Denoise [samples] at [sampleRate]. Returns null if unavailable or on error
-  /// (so the caller can fall back). Processes in ~20 s chunks, yielding between
-  /// chunks, so a long clip never blocks the UI thread (run() is synchronous).
-  static Future<Float32List?> denoise(Float32List samples, int sampleRate) async {
+  /// (so the caller can fall back).
+  ///
+  /// [passes] runs the neural model repeatedly on its own output — each extra
+  /// pass strips more residual noise (a second pass typically removes what the
+  /// first left behind in crowded / fan / TV backgrounds). All passes run at
+  /// 16 kHz so the audio is only resampled once in and once out. Work is done
+  /// in ~20 s chunks, yielding between chunks, so the UI never blocks.
+  static Future<Float32List?> denoise(
+    Float32List samples,
+    int sampleRate, {
+    int passes = 1,
+  }) async {
     if (!await initialize()) return null;
     final d = _denoiser;
     if (d == null || samples.isEmpty) return null;
     try {
-      final wav = sampleRate == _modelRate
-          ? samples
+      var wav = sampleRate == _modelRate
+          ? Float32List.fromList(samples)
           : _resample(samples, sampleRate, _modelRate);
 
-      const int chunk = _modelRate * 20; // 20 s per native call
-      Float32List out16;
-      if (wav.length <= chunk) {
-        out16 = d.run(samples: wav, sampleRate: _modelRate).samples;
-      } else {
-        final acc = <double>[];
-        for (int start = 0; start < wav.length; start += chunk) {
-          final end = (start + chunk) < wav.length ? start + chunk : wav.length;
-          final seg = Float32List(end - start)
-            ..setRange(0, end - start, wav, start);
-          acc.addAll(d.run(samples: seg, sampleRate: _modelRate).samples);
-          await Future<void>.delayed(Duration.zero);
-        }
-        out16 = Float32List.fromList(acc);
+      for (int p = 0; p < passes; p++) {
+        wav = await _runAllChunks(d, wav);
+        if (wav.isEmpty) return null;
       }
-      return sampleRate == _modelRate ? out16 : _resample(out16, _modelRate, sampleRate);
+      return sampleRate == _modelRate ? wav : _resample(wav, _modelRate, sampleRate);
     } catch (_) {
       return null;
     }
+  }
+
+  /// Run the GTCRN model over [wav] (already at 16 kHz) in ~20 s chunks.
+  static Future<Float32List> _runAllChunks(
+      sherpa_onnx.OfflineSpeechDenoiser d, Float32List wav) async {
+    const int chunk = _modelRate * 20;
+    if (wav.length <= chunk) {
+      return d.run(samples: wav, sampleRate: _modelRate).samples;
+    }
+    final acc = <double>[];
+    for (int start = 0; start < wav.length; start += chunk) {
+      final end = (start + chunk) < wav.length ? start + chunk : wav.length;
+      final seg = Float32List(end - start)..setRange(0, end - start, wav, start);
+      acc.addAll(d.run(samples: seg, sampleRate: _modelRate).samples);
+      await Future<void>.delayed(Duration.zero);
+    }
+    return Float32List.fromList(acc);
   }
 
   static Float32List _resample(Float32List input, int srcRate, int dstRate) {

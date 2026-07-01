@@ -24,15 +24,23 @@ class ProcessorService {
   }) async {
     onProgress?.call(0.05);
 
-    // ── 1. Genuine NEURAL denoiser (GTCRN, bundled ~0.5 MB ONNX model) ────────
-    // A real trained neural network, run via sherpa_onnx/ONNX Runtime over FFI
-    // (no model download, no fragile MethodChannel PCM transfer). This is the
-    // primary engine and reports as "Neural AI".
-    final neural = await NeuralDenoiserService.denoise(input.samples, input.sampleRate);
+    // ── 1. NEURAL CASCADE — strong removal, natural voice ─────────────────────
+    // A genuine trained neural network (GTCRN) run via sherpa_onnx/ONNX Runtime
+    // over FFI (single pass — one pass keeps the voice natural; a second neural
+    // pass over-processes and sounds robotic), finished with an aggressive DSP
+    // polish (MMSE spectral suppression + voice-band focus) to gate the
+    // remaining noise floor. Reports as "Neural AI".
+    final neural = await NeuralDenoiserService.denoise(
+        input.samples, input.sampleRate, passes: 1);
     if (neural != null && neural.isNotEmpty) {
+      onProgress?.call(0.7);
+      // Polish pass: gate residual noise + focus the speech band.
+      final polished = await NeuralProcessorService.denoise(neural, input.sampleRate);
       lastUsedNeural = true;
       onProgress?.call(1.0);
-      return AudioData.fromSamples(neural, input.sampleRate);
+      return AudioData.fromSamples(
+          (polished != null && polished.isNotEmpty) ? polished : neural,
+          input.sampleRate);
     }
 
     // ── 2. Native Kotlin engines (DeepFilterNet3 ONNX or built-in OMLSA) ──────
