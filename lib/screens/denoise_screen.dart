@@ -27,6 +27,7 @@ class DenoiseScreen extends StatefulWidget {
 class _DenoiseScreenState extends State<DenoiseScreen> {
   bool _showProcessed = false;
   bool _advancedOpen  = false;
+  bool _optionsOpen   = false; // presets + advanced hidden by default (minimal)
 
   // ── Recording (merged Record + Denoise) ──────────────────────────────────
   Timer? _recTimer;
@@ -92,10 +93,14 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
                         const SizedBox(height: 14),
                         _StatsCard(stats: prov.lastStats!),
                       ],
-                      const SizedBox(height: 20),
-                      _presetsGrid(prov),
                       const SizedBox(height: 16),
-                      _advancedSection(prov),
+                      _optionsToggle(),
+                      if (_optionsOpen) ...[
+                        const SizedBox(height: 14),
+                        _presetsGrid(prov),
+                        const SizedBox(height: 16),
+                        _advancedSection(prov),
+                      ],
                     ],
                   ],
                   if (prov.isProcessing || prov.isSplitting) ...[
@@ -265,6 +270,32 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
           isProcessed: true,
         ),
       ],
+    );
+  }
+
+  /// Minimalist expander that reveals the presets grid + advanced settings.
+  Widget _optionsToggle() {
+    return GestureDetector(
+      onTap: () => setState(() => _optionsOpen = !_optionsOpen),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border, width: 0.5),
+        ),
+        child: Row(children: [
+          const Icon(Icons.tune_rounded, size: 18, color: AppColors.textSec),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text('Options — presets & advanced',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                    color: AppColors.textPrim)),
+          ),
+          Icon(_optionsOpen ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              size: 20, color: AppColors.textSec),
+        ]),
+      ),
     );
   }
 
@@ -1092,11 +1123,9 @@ class _StatsCard extends StatelessWidget {
         )),
         Container(width: 0.5, height: 32, color: AppColors.border),
         Expanded(child: _Stat(
-          label: stats.usedNeural ? 'Neural AI' : 'DSP Mode',
-          value: stats.processingTime.inSeconds >= 1
-              ? '${stats.processingTime.inSeconds}s'
-              : '${stats.processingTime.inMilliseconds}ms',
-          color: stats.usedNeural ? AppColors.violet : AppColors.amber,
+          label: 'Engine',
+          value: stats.usedNeural ? 'Neural AI' : 'DSP',
+          color: stats.usedNeural ? AppColors.success : AppColors.amber,
         )),
       ]),
     );
