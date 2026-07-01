@@ -529,16 +529,33 @@ class AudioProvider extends ChangeNotifier {
     musicPath   = null;
   }
 
-  void undo() {
+  /// Persist the current in-memory [originalAudio] to a WAV file and point
+  /// [originalPath] at it, so playback (togglePlayOriginal) reflects edits.
+  Future<void> _persistOriginal() async {
+    final audio = originalAudio;
+    if (audio == null) { originalPath = null; return; }
+    try {
+      await stopAllPlayback();
+      final dir  = await getApplicationDocumentsDirectory();
+      final path = '${dir.path}/edit_${_uuid.v4()}.wav';
+      await File(path).writeAsBytes(
+          ProcessorService.encodeWav(audio.samples, audio.sampleRate));
+      originalPath = path;
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  Future<void> undo() async {
     if (_history.isEmpty) return;
     originalAudio  = _history.removeLast();
     processedAudio = null;
     processedPath  = null;
     _clearStems();
     notifyListeners();
+    await _persistOriginal();
   }
 
-  void restoreOriginal() {
+  Future<void> restoreOriginal() async {
     if (_savedOriginal == null) return;
     _history.clear();
     originalAudio  = _savedOriginal;
@@ -546,9 +563,10 @@ class AudioProvider extends ChangeNotifier {
     processedPath  = null;
     _clearStems();
     notifyListeners();
+    await _persistOriginal();
   }
 
-  void trimAudio(double startSec, double endSec) {
+  Future<void> trimAudio(double startSec, double endSec) async {
     final audio = originalAudio;
     if (audio == null) return;
     _pushHistory();
@@ -561,9 +579,10 @@ class AudioProvider extends ChangeNotifier {
     processedPath  = null;
     _clearStems();
     notifyListeners();
+    await _persistOriginal();
   }
 
-  void joinAudio(AudioData second) {
+  Future<void> joinAudio(AudioData second) async {
     final audio = originalAudio;
     if (audio == null) return;
     _pushHistory();
@@ -575,9 +594,10 @@ class AudioProvider extends ChangeNotifier {
     processedPath  = null;
     _clearStems();
     notifyListeners();
+    await _persistOriginal();
   }
 
-  void mixWithMusic(AudioData music, double voiceVol, double musicVol) {
+  Future<void> mixWithMusic(AudioData music, double voiceVol, double musicVol) async {
     final audio = originalAudio;
     if (audio == null) return;
     _pushHistory();
@@ -593,6 +613,7 @@ class AudioProvider extends ChangeNotifier {
     processedPath  = null;
     _clearStems();
     notifyListeners();
+    await _persistOriginal();
   }
 
   String? get shareFilePath => processedPath;
