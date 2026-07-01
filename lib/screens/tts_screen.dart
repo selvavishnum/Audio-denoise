@@ -8,8 +8,11 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../providers/audio_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/subscription_provider.dart';
 import '../services/neural_tts_service.dart';
 import '../theme.dart';
+import 'paywall_screen.dart';
 
 // Voice gender selection
 enum _VoiceGender { female, male }
@@ -143,10 +146,29 @@ class _TtsScreenState extends State<TtsScreen> {
     }
   }
 
+  bool get _isPro {
+    final sub  = context.read<SubscriptionProvider>();
+    final auth = context.read<AuthProvider>();
+    return sub.isPro || auth.isAdmin;
+  }
+
+  void _openPaywall() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PaywallScreen()),
+    );
+  }
+
   Future<void> _generate() async {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
     _focus.unfocus();
+
+    // Text to Voice is a Pro feature — gate generation behind the paywall.
+    if (!_isPro) {
+      _openPaywall();
+      return;
+    }
 
     setState(() { _generating = true; _error = null; _hasSpeech = false; });
 
@@ -297,15 +319,44 @@ class _TtsScreenState extends State<TtsScreen> {
     );
   }
 
-  Widget _header(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Text to Voice', style: Theme.of(context).textTheme.displayLarge),
-      const SizedBox(height: 4),
-      Text('AI neural speech synthesis',
-          style: Theme.of(context).textTheme.bodyMedium),
-    ],
-  );
+  Widget _header(BuildContext context) {
+    final isPro = context.watch<SubscriptionProvider>().isPro ||
+        context.watch<AuthProvider>().isAdmin;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Text to Voice', style: Theme.of(context).textTheme.displayLarge),
+              const SizedBox(height: 4),
+              Text('AI neural speech synthesis',
+                  style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
+        // PRO badge — filled when subscribed, outlined "lock" chip otherwise
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isPro ? AppColors.textPrim : AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: isPro ? null : Border.all(color: AppColors.border, width: 0.5),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(isPro ? Icons.workspace_premium_rounded : Icons.lock_outline_rounded,
+                size: 12, color: isPro ? AppColors.white : AppColors.textSec),
+            const SizedBox(width: 4),
+            Text('PRO',
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5,
+                    color: isPro ? AppColors.white : AppColors.textSec)),
+          ]),
+        ),
+      ],
+    );
+  }
 
   Widget _engineRow() => Row(
     children: [
@@ -460,32 +511,42 @@ class _TtsScreenState extends State<TtsScreen> {
     ],
   );
 
-  Widget _generateBtn() => GestureDetector(
-    onTap: _generating ? null : _generate,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: _generating ? AppColors.border : AppColors.textPrim,
-        borderRadius: BorderRadius.circular(16),
+  Widget _generateBtn() {
+    final isPro = context.watch<SubscriptionProvider>().isPro ||
+        context.watch<AuthProvider>().isAdmin;
+    return GestureDetector(
+      onTap: _generating ? null : _generate,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: _generating ? AppColors.border : AppColors.textPrim,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: _generating
+            ? const Center(
+                child: SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2, color: AppColors.white),
+                ),
+              )
+            : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                if (!isPro) ...[
+                  const Icon(Icons.lock_outline_rounded, size: 16, color: AppColors.white),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  isPro ? 'Generate Voice' : 'Unlock Pro to Generate',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.white),
+                ),
+              ]),
       ),
-      child: _generating
-          ? const Center(
-              child: SizedBox(
-                width: 20, height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2, color: AppColors.white),
-              ),
-            )
-          : const Text(
-              'Generate Voice',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.white),
-            ),
-    ),
-  );
+    );
+  }
 
   Widget _errorBadge() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
