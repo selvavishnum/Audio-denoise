@@ -46,6 +46,10 @@ class _EditScreenState extends State<EditScreen> {
             if (_tab == 0) _trimView(context, prov),
             if (_tab == 1) _joinView(context, prov),
             if (_tab == 2) _mixView(context, prov),
+            if (prov.originalAudio != null) ...[
+              const SizedBox(height: 24),
+              _playBar(prov),
+            ],
             const SizedBox(height: 40),
           ],
         ),
@@ -112,6 +116,44 @@ class _EditScreenState extends State<EditScreen> {
                 style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Play / replay the current edited audio — works after trim, join or mix.
+  Widget _playBar(AudioProvider prov) {
+    final playing = prov.playingOriginal;
+    return GestureDetector(
+      onTap: () => prov.togglePlayOriginal(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border, width: 0.5),
+        ),
+        child: Row(children: [
+          Container(
+            width: 46, height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.textPrim, borderRadius: BorderRadius.circular(23),
+            ),
+            child: Icon(playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                color: AppColors.white, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(playing ? 'Playing…' : 'Play edited audio',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                      color: AppColors.textPrim)),
+              const SizedBox(height: 2),
+              const Text('Preview your trim / join / mix result',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSec)),
+            ]),
+          ),
+          const Icon(Icons.graphic_eq_rounded, size: 18, color: AppColors.textDim),
+        ]),
       ),
     );
   }
@@ -228,11 +270,12 @@ class _EditScreenState extends State<EditScreen> {
     );
   }
 
-  void _doTrim(BuildContext context, AudioProvider prov, double start, double end) {
-    prov.trimAudio(start, end);
+  Future<void> _doTrim(BuildContext context, AudioProvider prov, double start, double end) async {
+    await prov.trimAudio(start, end);
+    if (!mounted) return;
     setState(() { _selStart = 0; _selEnd = 1; });
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Audio trimmed')));
+        .showSnackBar(const SnackBar(content: Text('Audio trimmed — tap play to preview')));
   }
 
   // ── Join view ──────────────────────────────────────────────────────────
@@ -301,12 +344,13 @@ class _EditScreenState extends State<EditScreen> {
     if (mounted) setState(() => _joinFile = data);
   }
 
-  void _doJoin(BuildContext context, AudioProvider prov) {
+  Future<void> _doJoin(BuildContext context, AudioProvider prov) async {
     if (_joinFile == null) return;
-    prov.joinAudio(_joinFile!);
+    await prov.joinAudio(_joinFile!);
+    if (!mounted) return;
     setState(() => _joinFile = null);
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Files joined')));
+        .showSnackBar(const SnackBar(content: Text('Files joined — tap play to preview')));
   }
 
   // ── Mix view ───────────────────────────────────────────────────────────
@@ -390,12 +434,13 @@ class _EditScreenState extends State<EditScreen> {
     if (mounted) setState(() => _musicFile = data);
   }
 
-  void _doMix(BuildContext context, AudioProvider prov) {
+  Future<void> _doMix(BuildContext context, AudioProvider prov) async {
     if (_musicFile == null) return;
-    prov.mixWithMusic(_musicFile!, _voiceVol, _musicVol);
+    await prov.mixWithMusic(_musicFile!, _voiceVol, _musicVol);
+    if (!mounted) return;
     setState(() { _musicFile = null; _voiceVol = 1.0; _musicVol = 0.5; });
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Music mixed in')));
+        .showSnackBar(const SnackBar(content: Text('Music mixed in — tap play to preview')));
   }
 
   // ── Shared helpers ─────────────────────────────────────────────────────
