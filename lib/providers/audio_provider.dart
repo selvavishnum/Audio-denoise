@@ -173,6 +173,25 @@ class AudioProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clear all loaded/processed audio so the Studio screen returns to its
+  /// empty Record / Upload state (used by the "New Record" action).
+  Future<void> resetForNew() async {
+    await stopAllPlayback();
+    originalAudio  = null;
+    _savedOriginal = null;
+    originalPath   = null;
+    processedAudio = null;
+    processedPath  = null;
+    lastStats      = null;
+    vocalsAudio    = null;
+    musicAudio     = null;
+    vocalsPath     = null;
+    musicPath      = null;
+    errorMessage   = null;
+    _history.clear();
+    notifyListeners();
+  }
+
   // ── Import ───────────────────────────────────────────────────────────
 
   Future<void> loadFile(String path) async {

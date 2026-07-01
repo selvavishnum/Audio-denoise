@@ -456,52 +456,76 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   }
 
   Widget _bottomBar(BuildContext context, AudioProvider prov) {
-    final isPro = context.watch<SubscriptionProvider>().isPro;
+    final isPro   = context.watch<SubscriptionProvider>().isPro;
     final isSplit = _isSplitMode(prov);
-    final busy = prov.isProcessing || prov.isSplitting;
+    final busy    = prov.isProcessing || prov.isSplitting;
+    final hasProcessed = prov.processedAudio != null;
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       decoration: const BoxDecoration(
         color: AppColors.white,
         border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: _BigBtn(
-              label: busy
-                  ? 'Processing…'
-                  : (isSplit ? 'Split Vocals & Music' : (isPro ? 'Isolate Voice' : 'Process')),
-              icon: busy ? Icons.hourglass_empty_rounded : Icons.auto_fix_high_rounded,
-              filled: true,
-              onTap: busy
-                  ? null
-                  : () => isSplit ? prov.splitStems() : prov.processAudio(premium: isPro),
-              child: busy
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white))
-                  : null,
-            ),
-          ),
-          if (!isSplit && prov.processedAudio != null) ...[
-            const SizedBox(width: 10),
-            _BigBtn(
-              label: 'Export',
-              icon:  Icons.ios_share_rounded,
-              filled: false,
-              onTap: () => _export(context, prov),
-            ),
-          ],
-          const SizedBox(width: 10),
+          // Primary — Process Audio (full width)
           _BigBtn(
-            label: 'Import',
-            icon:  Icons.upload_file_rounded,
-            filled: false,
-            onTap: () => _importFile(prov),
+            label: busy
+                ? 'Processing…'
+                : (isSplit ? 'Split Vocals & Music' : 'Process Audio'),
+            icon: busy ? Icons.hourglass_empty_rounded : Icons.auto_fix_high_rounded,
+            filled: true,
+            onTap: busy
+                ? null
+                : () => isSplit ? prov.splitStems() : prov.processAudio(premium: isPro),
+            child: busy
+                ? const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white))
+                : null,
+          ),
+          const SizedBox(height: 12),
+          // Secondary — minimalist row: Download · New Record · Upload
+          Row(
+            children: [
+              Expanded(child: _MiniAction(
+                icon: Icons.download_rounded,
+                label: 'Download',
+                enabled: hasProcessed && !busy,
+                onTap: () => _export(context, prov),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _MiniAction(
+                icon: Icons.mic_rounded,
+                label: 'New Record',
+                enabled: !busy,
+                onTap: () => _newRecord(prov),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _MiniAction(
+                icon: Icons.upload_file_rounded,
+                label: 'Upload',
+                enabled: !busy,
+                onTap: () => _newUpload(prov),
+              )),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  /// Discard current audio and immediately start a fresh recording.
+  Future<void> _newRecord(AudioProvider prov) async {
+    await prov.resetForNew();
+    setState(() => _showProcessed = false);
+    await _toggleRecord(prov);
+  }
+
+  /// Discard current audio and pick a new file to upload.
+  Future<void> _newUpload(AudioProvider prov) async {
+    await prov.resetForNew();
+    await _importFile(prov);
   }
 
   Future<void> _importFile(AudioProvider prov) async {
@@ -839,6 +863,53 @@ class _BigBtn extends StatelessWidget {
               color: filled ? AppColors.white : AppColors.textSec,
             )),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Minimalist secondary action (icon over label) ─────────────────────────────
+
+class _MiniAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _MiniAction({
+    required this.icon,
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = enabled ? AppColors.textPrim : AppColors.textDim;
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Opacity(
+        opacity: enabled ? 1.0 : 0.4,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border, width: 0.5),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(height: 5),
+              Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+            ],
+          ),
         ),
       ),
     );
