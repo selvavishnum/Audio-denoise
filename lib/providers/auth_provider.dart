@@ -9,6 +9,9 @@ class AuthProvider extends ChangeNotifier {
     'ADMIN_EMAIL',
     defaultValue: 'selvavishnu.m@gmail.com',
   );
+  // Play Store review account — treated as admin so Google's reviewers get
+  // every Pro feature unlocked without needing to make a purchase.
+  static const _reviewEmail = 'noiseclear.review@gmail.com';
 
   final _auth = FirebaseAuth.instance;
   // serverClientId (web client type-3) is required for Android to generate
@@ -20,7 +23,10 @@ class AuthProvider extends ChangeNotifier {
 
   User? get user => _auth.currentUser;
   bool get isLoggedIn => user != null;
-  bool get isAdmin => email == _adminEmail;
+  bool get isAdmin {
+    final e = email.toLowerCase().trim();
+    return e.isNotEmpty && (e == _adminEmail.toLowerCase() || e == _reviewEmail);
+  }
   String get displayName => user?.displayName ?? '';
   String get email => user?.email ?? '';
   String? get photoUrl => user?.photoURL;

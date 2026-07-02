@@ -12,15 +12,21 @@ class SubscriptionProvider extends ChangeNotifier {
     'ADMIN_EMAIL',
     defaultValue: 'selvavishnu.m@gmail.com',
   );
+  // Play Store review account — Pro unlocked without purchase so Google's
+  // reviewers can access all paid features (they cannot make purchases).
+  static const _reviewEmail = 'noiseclear.review@gmail.com';
 
   bool _isPro = false;
   String _activeProduct = '';
   List<Package> _packages = [];
   bool _initialized = false;
 
-  // Admin email bypasses all paywalls — no purchase required.
-  bool get isPro => _isPro ||
-      (FirebaseAuth.instance.currentUser?.email == _adminEmail);
+  // Admin / review emails bypass all paywalls — no purchase required.
+  bool get isPro {
+    if (_isPro) return true;
+    final e = (FirebaseAuth.instance.currentUser?.email ?? '').toLowerCase().trim();
+    return e == _adminEmail.toLowerCase() || e == _reviewEmail;
+  }
   String get activeProduct => _activeProduct;
   List<Package> get packages => _packages;
 
