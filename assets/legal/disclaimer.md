@@ -83,7 +83,7 @@ This Disclaimer ("Disclaimer") applies to the NoiseClear mobile application for 
 
 **Our intellectual property.** The App, including its software, user interface, models, presets, algorithms, audio-processing pipelines, brand elements, and documentation, is protected by copyright, trade-secret, and other intellectual-property laws. Our use of the NoiseClear name and associated brand elements is protected by trade-mark law. Nothing in these documents grants you any licence or right in our intellectual property beyond the limited licence to use the App as described in the Terms of Service. Unauthorised reproduction, distribution, reverse engineering, or commercial exploitation of any part of the App is prohibited and may expose you to civil and criminal liability.
 
-**Open-source components.** The App incorporates third-party software components that are made available under open-source licences. Your use of those components is also governed by their respective open-source licences, which prevail over any conflicting provision of these documents in respect of those components alone. We endeavour to maintain an accurate record of the open-source components used in the App and of the licences under which they are made available; if you need specific information about those components, please contact us at selvavishnu.m@gmail.com.
+**Open-source components.** The App incorporates third-party software components that are made available under open-source licences. Your use of those components is also governed by their respective open-source licences, which prevail over any conflicting provision of these documents in respect of those components alone. We endeavour to maintain an accurate record of the open-source components used in the App and of the licences under which they are made available; if you need specific information about those components, please contact us at noiseclear.review@gmail.com.
 
 ## 7. Limitation of Our Liability and Your Responsibilities
 
@@ -116,7 +116,7 @@ This Disclaimer ("Disclaimer") applies to the NoiseClear mobile application for 
 
 **Contact and support.** If you have any question about this Disclaimer, wish to report a concern about the App or its outputs, or wish to exercise any right under the Terms of Service or the Privacy Policy, please contact us at:
 
-**selvavishnu.m@gmail.com**
+**noiseclear.review@gmail.com**
 
 We aim to acknowledge all queries within five business days and to provide a substantive response as soon as reasonably practicable. We are a small, independent developer, and while we are committed to providing attentive support, response times may vary during periods of high demand or other operational constraints.
 
