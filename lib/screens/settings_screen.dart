@@ -206,10 +206,69 @@ class SettingsScreen extends StatelessWidget {
                         color: AppColors.textSec)),
               ),
             ),
+            const SizedBox(height: 10),
+            // Delete Account — permanent data deletion (Play Store requirement)
+            GestureDetector(
+              onTap: () => _confirmDeleteAccount(context),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: const Text('Delete Account',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                        color: AppColors.danger)),
+              ),
+            ),
           ],
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDeleteAccount(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete account?',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
+        content: const Text(
+          'This permanently deletes your account and associated data (email, '
+          'display name, sign-in data). Your on-device recordings are not '
+          'uploaded and stay on your phone. This cannot be undone.',
+          style: TextStyle(fontSize: 13, color: AppColors.textSec, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textDim)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete',
+                style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    final sub  = context.read<SubscriptionProvider>();
+    final error = await auth.deleteAccount();
+    if (!context.mounted) return;
+    if (error == null) {
+      await sub.logoutUser();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account deleted')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error)),
+      );
+    }
   }
 
   Widget _initials(String name) {
