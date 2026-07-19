@@ -86,4 +86,27 @@ class AuthProvider extends ChangeNotifier {
     await _googleSignIn.signOut();
     notifyListeners();
   }
+
+  /// Permanently delete the signed-in user's account and associated auth data
+  /// from Firebase. Returns null on success, or a human-readable error.
+  /// Firebase requires a recent login to delete; if the session is stale we
+  /// return a message asking the user to sign in again and retry.
+  Future<String?> deleteAccount() async {
+    final u = _auth.currentUser;
+    if (u == null) return 'You are not signed in.';
+    try {
+      await u.delete();
+      await _googleSignIn.signOut();
+      notifyListeners();
+      return null;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        return 'For security, please sign out and sign in again, then delete '
+            'your account.';
+      }
+      return 'Could not delete account: ${e.message ?? e.code}';
+    } catch (e) {
+      return 'Could not delete account: $e';
+    }
+  }
 }
