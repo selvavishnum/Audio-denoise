@@ -18,6 +18,11 @@
     <!-- Android 13+ media permissions -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
+    <!-- Do not add FOREGROUND_SERVICE / FOREGROUND_SERVICE_MICROPHONE unless the
+         app actually implements a foreground Service for background recording.
+         Declaring it unused forces a mandatory Play Console declaration + demo
+         video and blocks release (see commit history). -->
+
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
