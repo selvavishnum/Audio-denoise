@@ -145,6 +145,24 @@ jobs:
           path: build/app/outputs/bundle/release/NoiseClear-*.aab
           retention-days: 90
 
+      # ── Deobfuscation (mapping) file — fixes Play Console's warning ────
+      # minifyEnabled true (R8) already produces this at build time; it just
+      # was never captured anywhere. Rename + upload it so it can be attached
+      # in Play Console: App bundle explorer -> select this version ->
+      # Downloads tab -> "Upload deobfuscation file". Optional but recommended
+      # so crashes/ANRs show real symbol names instead of a1.b2.c3.
+      - name: Rename R8 mapping file
+        run: |
+          cp build/app/outputs/mapping/release/mapping.txt \
+             build/app/outputs/mapping/release/NoiseClear-${{ steps.ver.outputs.name }}-mapping.txt
+
+      - name: Upload mapping file artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoiseClear-${{ steps.ver.outputs.name }}-mapping
+          path: build/app/outputs/mapping/release/NoiseClear-*-mapping.txt
+          retention-days: 90
+
       # ── GitHub Release (on tag push OR manual dispatch) ───────────────
       # On manual dispatch the tag does not yet exist; action-gh-release
       # creates it at the checked-out commit (target_commitish).
@@ -165,6 +183,11 @@ jobs:
             with App Signing. Version code: **${{ steps.ver.outputs.code }}**
             (must be higher than the previous upload).
 
+            After uploading, clear the "no deobfuscation file" warning:
+            App bundle explorer → select this version → Downloads tab →
+            Upload deobfuscation file → pick **NoiseClear-${{ steps.ver.outputs.name }}-mapping.txt**
+            below. Optional, but makes crash/ANR reports readable.
+
             ### Sideload / direct install (testing)
             1. Download **NoiseClear-${{ steps.ver.outputs.name }}.apk** below.
             2. On your Android device: **Settings → Apps → Install unknown apps** → allow your browser/file manager.
@@ -178,6 +201,7 @@ jobs:
           files: |
             build/app/outputs/flutter-apk/NoiseClear-*.apk
             build/app/outputs/bundle/release/NoiseClear-*.aab
+            build/app/outputs/mapping/release/NoiseClear-*-mapping.txt
           draft: false
           prerelease: false
         env:

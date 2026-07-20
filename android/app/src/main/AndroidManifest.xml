@@ -18,10 +18,6 @@
     <!-- Android 13+ media permissions -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
-    <!-- Foreground service for recording -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
