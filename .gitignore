@@ -63,3 +63,4 @@ android/app/*.keystore
 
 # transient legal-docs workflow output (harvested into assets/legal, then removed)
 /undefined/
+.gstack/
