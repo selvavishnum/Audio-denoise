@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "888976648050-ks0rtbrfrgoi26l27n4i0srbccglore6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.noiseclear.app",
+            "certificate_hash": "25d7caaf0eb57993d37a2ffc6d99b0e4a4a9982f"
+          }
+        },
+        {
           "client_id": "888976648050-nk5svn13jeu28aleiis2lj36qbs5ia9f.apps.googleusercontent.com",
           "client_type": 3
         }
