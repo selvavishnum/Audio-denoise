@@ -14,6 +14,7 @@ import '../services/analytics_service.dart';
 import '../theme.dart';
 import '../widgets/param_slider.dart';
 import '../widgets/preset_card.dart';
+import '../widgets/save_gate_sheet.dart';
 import '../widgets/waveform_painter.dart';
 import 'paywall_screen.dart';
 
@@ -138,7 +139,7 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
                 style: Theme.of(context).textTheme.bodyMedium),
           ],
         )),
-        _buildExportBadge(context, prov),
+        const FreeLimitBadge(),
       ],
     );
   }
@@ -583,31 +584,6 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
     }
   }
 
-  Widget _buildExportBadge(BuildContext context, AudioProvider prov) {
-    final isPro = context.watch<SubscriptionProvider>().isPro;
-    if (isPro) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(color: AppColors.textPrim, borderRadius: BorderRadius.circular(20)),
-        child: const Text('PRO',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                color: AppColors.white, letterSpacing: 0.5)),
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border, width: 0.5),
-      ),
-      child: Text(
-        prov.hasReachedFreeLimit ? 'Limit reached' : '${prov.freeExportsLeft} free left',
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSec),
-      ),
-    );
-  }
-
   Future<void> _export(BuildContext context, AudioProvider prov) async {
     final path = prov.shareFilePath;
     if (path == null) return;
@@ -661,23 +637,18 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   }
 
   Future<void> _showExportGate(BuildContext context, AudioProvider prov, String path) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => _ExportGateSheet(
-        canWatchAd: prov.canUseDailyBonus && AdService.isReady,
-        onWatchAd: () async {
-          Navigator.pop(context);
-          await _showRewardedAd(context, prov, path);
-        },
-        onUpgrade: () {
-          Navigator.pop(context);
-          _openPaywall(context);
-        },
-      ),
+    await showSaveGateSheet(
+      context,
+      title: '30 free exports used',
+      canWatchAd: prov.canUseDailyBonus && AdService.isReady,
+      onWatchAd: () async {
+        Navigator.pop(context);
+        await _showRewardedAd(context, prov, path);
+      },
+      onUpgrade: () {
+        Navigator.pop(context);
+        _openPaywall(context);
+      },
     );
   }
 
@@ -999,96 +970,6 @@ class _EntryCard extends StatelessWidget {
                     color: filled ? AppColors.white.withValues(alpha: 0.7) : AppColors.textDim)),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ── Monetization gate bottom sheet ────────────────────────────────────────────
-
-class _ExportGateSheet extends StatelessWidget {
-  final bool canWatchAd;
-  final VoidCallback onWatchAd;
-  final VoidCallback onUpgrade;
-  const _ExportGateSheet({
-    required this.canWatchAd,
-    required this.onWatchAd,
-    required this.onUpgrade,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border, width: 0.5),
-              ),
-              child: const Icon(Icons.lock_open_rounded, size: 22, color: AppColors.textPrim),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('30 free exports used',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
-                const SizedBox(height: 2),
-                Text(
-                  canWatchAd ? 'Watch a short ad for 1 free export today' : 'Upgrade for unlimited access',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSec),
-                ),
-              ]),
-            ),
-          ]),
-          const SizedBox(height: 24),
-          if (canWatchAd) ...[
-            GestureDetector(
-              onTap: onWatchAd,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.textPrim,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.play_circle_rounded, size: 18, color: AppColors.white),
-                  SizedBox(width: 8),
-                  Text('Watch Ad  —  1 Free Export Today',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.white)),
-                ]),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-          GestureDetector(
-            onTap: onUpgrade,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: canWatchAd ? AppColors.surface : AppColors.textPrim,
-                borderRadius: BorderRadius.circular(14),
-                border: canWatchAd ? Border.all(color: AppColors.border, width: 0.5) : null,
-              ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.workspace_premium_rounded, size: 18,
-                    color: canWatchAd ? AppColors.textSec : AppColors.white),
-                const SizedBox(width: 8),
-                Text('Upgrade Pro  —  from ₹199/month',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
-                        color: canWatchAd ? AppColors.textSec : AppColors.white)),
-              ]),
-            ),
-          ),
-        ],
       ),
     );
   }

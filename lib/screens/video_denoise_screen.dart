@@ -8,10 +8,12 @@ import 'package:video_player/video_player.dart';
 
 import '../providers/audio_provider.dart';
 import '../providers/subscription_provider.dart';
+import '../services/ad_service.dart';
 import '../services/analytics_service.dart';
 import '../services/eleven_labs_service.dart';
 import '../services/video_processor_service.dart';
 import '../theme.dart';
+import '../widgets/save_gate_sheet.dart';
 import 'paywall_screen.dart';
 
 enum _Engine { onDevice, elevenLabs }
@@ -44,58 +46,12 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isPro = context.watch<SubscriptionProvider>().isPro;
-    return SafeArea(child: isPro ? _mainContent(context) : _proGate(context));
+    // Uploading, processing, and previewing video noise removal is free and
+    // unlimited for everyone. Only Export (saving the result) is gated —
+    // see _export() below, which shares the same 30-free-save pool as
+    // Studio and Voice.
+    return SafeArea(child: _mainContent(context));
   }
-
-  // ── Pro gate ──────────────────────────────────────────────────────────────
-
-  Widget _proGate(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 72, height: 72,
-          decoration: BoxDecoration(
-            color: AppColors.surface, borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border, width: 0.5),
-          ),
-          child: const Icon(Icons.videocam_rounded, size: 36, color: AppColors.textDim),
-        ),
-        const SizedBox(height: 20),
-        const Text('Video Noise Removal',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
-                color: AppColors.textPrim), textAlign: TextAlign.center),
-        const SizedBox(height: 10),
-        const Text(
-          'Import or record a video. NoiseClear removes background noise from '
-          'the audio track using on-device AI or ElevenLabs cloud isolation.',
-          style: TextStyle(fontSize: 13, color: AppColors.textSec, height: 1.5),
-          textAlign: TextAlign.center),
-        const SizedBox(height: 8),
-        const Text('Available on Pro.',
-            style: TextStyle(fontSize: 12, color: AppColors.textDim),
-            textAlign: TextAlign.center),
-        const SizedBox(height: 28),
-        GestureDetector(
-          onTap: () {
-            AnalyticsService.logPaywallShown('video_feature');
-            Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const PaywallScreen()));
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppColors.textPrim, borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Text('Unlock Pro',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
-                    color: AppColors.white)),
-          ),
-        ),
-      ]),
-    ),
-  );
 
   // ── Main content ──────────────────────────────────────────────────────────
 
@@ -142,15 +98,7 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
       const Text('AI noise removal from your video audio track',
           style: TextStyle(fontSize: 13, color: AppColors.textSec)),
     ])),
-    Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.textPrim, borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Text('PRO',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-              color: AppColors.white, letterSpacing: 0.5)),
-    ),
+    const FreeLimitBadge(),
   ]);
 
   // ── Engine selector ───────────────────────────────────────────────────────
@@ -421,11 +369,61 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
     setState(() { _processedPath = path; _processing = false; _progress = 0; _statusMsg = ''; });
   }
 
+  // Uploading, processing, and previewing are always free. Saving/exporting
+  // the cleaned video draws from the same shared 30-free-save pool as
+  // Studio and Voice (AudioProvider.exportCount) — Pro subscribers skip
+  // the gate entirely.
   Future<void> _export(BuildContext context) async {
     if (_processedPath == null) return;
-    await context.read<AudioProvider>().recordExport();
+    final prov  = context.read<AudioProvider>();
+    final isPro = context.read<SubscriptionProvider>().isPro;
+
+    if (isPro || !prov.hasReachedFreeLimit) {
+      await _shareVideo(prov);
+    } else {
+      await AnalyticsService.logFreeLimitReached();
+      await showSaveGateSheet(
+        context,
+        title: '30 free saves used',
+        canWatchAd: prov.canUseDailyBonus && AdService.isReady,
+        onWatchAd: () async {
+          Navigator.pop(context);
+          await _showRewardedAd(context, prov);
+        },
+        onUpgrade: () {
+          Navigator.pop(context);
+          _openPaywall(context);
+        },
+      );
+    }
+  }
+
+  Future<void> _shareVideo(AudioProvider prov) async {
+    if (_processedPath == null) return;
+    await prov.recordExport();
     await SharePlus.instance.share(
         ShareParams(files: [XFile(_processedPath!)], text: 'NoiseClear — clean video'));
+  }
+
+  Future<void> _showRewardedAd(BuildContext context, AudioProvider prov) async {
+    await AnalyticsService.logRewardedAdShown();
+    bool rewarded = false;
+
+    await AdService.showRewardedAd(onRewarded: () { rewarded = true; });
+
+    if (rewarded) {
+      await AnalyticsService.logRewardedAdCompleted();
+      await AnalyticsService.logBonusExportEarned();
+      await prov.useDailyBonus();
+      if (mounted) await _shareVideo(prov);
+    } else {
+      await AnalyticsService.logRewardedAdSkipped();
+    }
+  }
+
+  void _openPaywall(BuildContext context) {
+    AnalyticsService.logPaywallShown('video_save');
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
   }
 
   // ── ElevenLabs API key dialog ─────────────────────────────────────────────
