@@ -29,6 +29,7 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
   String?  _videoPath;
   String?  _processedPath;
   bool     _processing  = false;
+  bool     _exporting   = false; // guards against double-tap double-charging the save counter
   double   _progress    = 0.0;
   String?  _error;
   String   _statusMsg   = '';
@@ -254,7 +255,7 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
       if (_processedPath != null) ...[
         const SizedBox(width: 8),
         _Btn(label: 'Export', icon: Icons.ios_share_rounded, filled: false,
-            onTap: _processing ? null : () => _export(context)),
+            onTap: _processing || _exporting ? null : () => _export(context)),
       ],
     ]),
   );
@@ -374,27 +375,32 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
   // Studio and Voice (AudioProvider.exportCount) — Pro subscribers skip
   // the gate entirely.
   Future<void> _export(BuildContext context) async {
-    if (_processedPath == null) return;
+    if (_processedPath == null || _exporting) return;
     final prov  = context.read<AudioProvider>();
     final isPro = context.read<SubscriptionProvider>().isPro;
 
-    if (isPro || !prov.hasReachedFreeLimit) {
-      await _shareVideo(prov);
-    } else {
-      await AnalyticsService.logFreeLimitReached();
-      await showSaveGateSheet(
-        context,
-        title: '${AudioProvider.freeExportLimit} free saves used',
-        canWatchAd: prov.canUseDailyBonus && AdService.isReady,
-        onWatchAd: () async {
-          Navigator.pop(context);
-          await _showRewardedAd(context, prov);
-        },
-        onUpgrade: () {
-          Navigator.pop(context);
-          _openPaywall(context);
-        },
-      );
+    setState(() => _exporting = true);
+    try {
+      if (isPro || !prov.hasReachedFreeLimit) {
+        await _shareVideo(prov);
+      } else {
+        await AnalyticsService.logFreeLimitReached();
+        await showSaveGateSheet(
+          context,
+          title: '${AudioProvider.freeExportLimit} free saves used',
+          canWatchAd: prov.canUseDailyBonus && AdService.isReady,
+          onWatchAd: () async {
+            Navigator.pop(context);
+            await _showRewardedAd(context, prov);
+          },
+          onUpgrade: () {
+            Navigator.pop(context);
+            _openPaywall(context);
+          },
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 

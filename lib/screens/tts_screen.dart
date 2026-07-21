@@ -44,6 +44,7 @@ class _TtsScreenState extends State<TtsScreen> {
   bool _generating             = false;
   bool _playing                = false;
   bool _hasSpeech              = false;
+  bool _saving                 = false; // guards against double-tap double-charging the save counter
   String? _speechPath;
   String? _error;
 
@@ -263,26 +264,31 @@ class _TtsScreenState extends State<TtsScreen> {
   // 30-free-save pool as Studio and Video (AudioProvider.exportCount) —
   // Pro subscribers and admin skip the gate entirely.
   Future<void> _saveVoice() async {
-    if (_speechPath == null) return;
+    if (_speechPath == null || _saving) return;
     final prov = context.read<AudioProvider>();
 
-    if (_isPro || !prov.hasReachedFreeLimit) {
-      await _shareVoice(prov);
-    } else {
-      await AnalyticsService.logFreeLimitReached();
-      await showSaveGateSheet(
-        context,
-        title: '${AudioProvider.freeExportLimit} free saves used',
-        canWatchAd: prov.canUseDailyBonus && AdService.isReady,
-        onWatchAd: () async {
-          Navigator.pop(context);
-          await _showRewardedAd(prov);
-        },
-        onUpgrade: () {
-          Navigator.pop(context);
-          _openPaywall();
-        },
-      );
+    setState(() => _saving = true);
+    try {
+      if (_isPro || !prov.hasReachedFreeLimit) {
+        await _shareVoice(prov);
+      } else {
+        await AnalyticsService.logFreeLimitReached();
+        await showSaveGateSheet(
+          context,
+          title: '${AudioProvider.freeExportLimit} free saves used',
+          canWatchAd: prov.canUseDailyBonus && AdService.isReady,
+          onWatchAd: () async {
+            Navigator.pop(context);
+            await _showRewardedAd(prov);
+          },
+          onUpgrade: () {
+            Navigator.pop(context);
+            _openPaywall();
+          },
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -628,7 +634,7 @@ class _TtsScreenState extends State<TtsScreen> {
       label: 'Save / Share Audio',
       icon: Icons.download_rounded,
       filled: true,
-      onTap: _saveVoice,
+      onTap: _saving ? null : _saveVoice,
     ),
     const SizedBox(height: 12),
     Row(children: [
@@ -752,7 +758,7 @@ class _ActionBtn extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool filled;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _ActionBtn({
     required this.label, required this.icon,

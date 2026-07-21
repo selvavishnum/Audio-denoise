@@ -29,6 +29,7 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   bool _showProcessed = false;
   bool _advancedOpen  = false;
   bool _optionsOpen   = false; // presets + advanced hidden by default (minimal)
+  bool _exporting     = false; // guards against double-tap double-charging the save counter
 
   // ── Recording (merged Record + Denoise) ──────────────────────────────────
   Timer? _recTimer;
@@ -522,7 +523,7 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
               Expanded(child: _MiniAction(
                 icon: Icons.download_rounded,
                 label: 'Download',
-                enabled: hasProcessed && !busy,
+                enabled: hasProcessed && !busy && !_exporting,
                 onTap: () => _export(context, prov),
               )),
               const SizedBox(width: 10),
@@ -584,15 +585,21 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   }
 
   Future<void> _export(BuildContext context, AudioProvider prov) async {
+    if (_exporting) return;
     final path = prov.shareFilePath;
     if (path == null) return;
 
-    final isPro = context.read<SubscriptionProvider>().isPro;
-    if (isPro || !prov.hasReachedFreeLimit) {
-      await _showExportFormatDialog(context, prov, path);
-    } else {
-      await AnalyticsService.logFreeLimitReached();
-      await _showExportGate(context, prov, path);
+    setState(() => _exporting = true);
+    try {
+      final isPro = context.read<SubscriptionProvider>().isPro;
+      if (isPro || !prov.hasReachedFreeLimit) {
+        await _showExportFormatDialog(context, prov, path);
+      } else {
+        await AnalyticsService.logFreeLimitReached();
+        await _showExportGate(context, prov, path);
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
