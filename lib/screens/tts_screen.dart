@@ -10,8 +10,11 @@ import 'package:share_plus/share_plus.dart';
 import '../providers/audio_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/subscription_provider.dart';
+import '../services/ad_service.dart';
+import '../services/analytics_service.dart';
 import '../services/neural_tts_service.dart';
 import '../theme.dart';
+import '../widgets/save_gate_sheet.dart';
 import 'paywall_screen.dart';
 
 // Voice gender selection
@@ -41,6 +44,7 @@ class _TtsScreenState extends State<TtsScreen> {
   bool _generating             = false;
   bool _playing                = false;
   bool _hasSpeech              = false;
+  bool _saving                 = false; // guards against double-tap double-charging the save counter
   String? _speechPath;
   String? _error;
 
@@ -153,22 +157,19 @@ class _TtsScreenState extends State<TtsScreen> {
   }
 
   void _openPaywall() {
+    AnalyticsService.logPaywallShown('voice_save');
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const PaywallScreen()),
     );
   }
 
+  // Generating and previewing a voice is free and unlimited for everyone.
+  // Only saving/downloading the result is gated — see _saveVoice() below.
   Future<void> _generate() async {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
     _focus.unfocus();
-
-    // Text to Voice is a Pro feature — gate generation behind the paywall.
-    if (!_isPro) {
-      _openPaywall();
-      return;
-    }
 
     setState(() { _generating = true; _error = null; _hasSpeech = false; });
 
@@ -259,9 +260,42 @@ class _TtsScreenState extends State<TtsScreen> {
     );
   }
 
+  // Saving/downloading the generated voice draws from the same shared
+  // 30-free-save pool as Studio and Video (AudioProvider.exportCount) —
+  // Pro subscribers and admin skip the gate entirely.
   Future<void> _saveVoice() async {
+    if (_speechPath == null || _saving) return;
+    final prov = context.read<AudioProvider>();
+
+    setState(() => _saving = true);
+    try {
+      if (_isPro || !prov.hasReachedFreeLimit) {
+        await _shareVoice(prov);
+      } else {
+        await AnalyticsService.logFreeLimitReached();
+        await showSaveGateSheet(
+          context,
+          title: '${AudioProvider.freeExportLimit} free saves used',
+          canWatchAd: prov.canUseDailyBonus && AdService.isReady,
+          onWatchAd: () async {
+            Navigator.pop(context);
+            await _showRewardedAd(prov);
+          },
+          onUpgrade: () {
+            Navigator.pop(context);
+            _openPaywall();
+          },
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _shareVoice(AudioProvider prov) async {
     if (_speechPath == null) return;
     try {
+      await prov.recordExport();
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(_speechPath!)],
@@ -274,6 +308,22 @@ class _TtsScreenState extends State<TtsScreen> {
           SnackBar(content: Text('Could not share audio: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _showRewardedAd(AudioProvider prov) async {
+    await AnalyticsService.logRewardedAdShown();
+    bool rewarded = false;
+
+    await AdService.showRewardedAd(onRewarded: () { rewarded = true; });
+
+    if (rewarded) {
+      await AnalyticsService.logRewardedAdCompleted();
+      await AnalyticsService.logBonusExportEarned();
+      await prov.useDailyBonus();
+      if (mounted) await _shareVoice(prov);
+    } else {
+      await AnalyticsService.logRewardedAdSkipped();
     }
   }
 
@@ -320,8 +370,6 @@ class _TtsScreenState extends State<TtsScreen> {
   }
 
   Widget _header(BuildContext context) {
-    final isPro = context.watch<SubscriptionProvider>().isPro ||
-        context.watch<AuthProvider>().isAdmin;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -336,24 +384,7 @@ class _TtsScreenState extends State<TtsScreen> {
             ],
           ),
         ),
-        // PRO badge — filled when subscribed, outlined "lock" chip otherwise
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: isPro ? AppColors.textPrim : AppColors.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: isPro ? null : Border.all(color: AppColors.border, width: 0.5),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(isPro ? Icons.workspace_premium_rounded : Icons.lock_outline_rounded,
-                size: 12, color: isPro ? AppColors.white : AppColors.textSec),
-            const SizedBox(width: 4),
-            Text('PRO',
-                style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5,
-                    color: isPro ? AppColors.white : AppColors.textSec)),
-          ]),
-        ),
+        const FreeLimitBadge(),
       ],
     );
   }
@@ -512,8 +543,6 @@ class _TtsScreenState extends State<TtsScreen> {
   );
 
   Widget _generateBtn() {
-    final isPro = context.watch<SubscriptionProvider>().isPro ||
-        context.watch<AuthProvider>().isAdmin;
     return GestureDetector(
       onTap: _generating ? null : _generate,
       child: AnimatedContainer(
@@ -532,18 +561,12 @@ class _TtsScreenState extends State<TtsScreen> {
                     strokeWidth: 2, color: AppColors.white),
                 ),
               )
-            : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                if (!isPro) ...[
-                  const Icon(Icons.lock_outline_rounded, size: 16, color: AppColors.white),
-                  const SizedBox(width: 8),
-                ],
-                Text(
-                  isPro ? 'Generate Voice' : 'Unlock Pro to Generate',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.white),
-                ),
-              ]),
+            : const Text(
+                'Generate Voice',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.white),
+              ),
       ),
     );
   }
@@ -611,7 +634,7 @@ class _TtsScreenState extends State<TtsScreen> {
       label: 'Save / Share Audio',
       icon: Icons.download_rounded,
       filled: true,
-      onTap: _saveVoice,
+      onTap: _saving ? null : _saveVoice,
     ),
     const SizedBox(height: 12),
     Row(children: [
@@ -735,7 +758,7 @@ class _ActionBtn extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool filled;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _ActionBtn({
     required this.label, required this.icon,

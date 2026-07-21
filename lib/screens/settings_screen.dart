@@ -226,31 +226,10 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Future<void> _confirmDeleteAccount(BuildContext context) async {
+    final email = context.read<AuthProvider>().email;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.bg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete account?',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
-        content: const Text(
-          'This permanently deletes your account and associated data (email, '
-          'display name, sign-in data). Your on-device recordings are not '
-          'uploaded and stay on your phone. This cannot be undone.',
-          style: TextStyle(fontSize: 13, color: AppColors.textSec, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textDim)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete',
-                style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
+      builder: (_) => _DeleteAccountDialog(email: email),
     );
     if (ok != true || !context.mounted) return;
 
@@ -511,6 +490,96 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
+
+/// Delete-account confirmation dialog. Requires the user to type their exact
+/// signed-in email address before the Delete button becomes tappable — a
+/// safety net against accidental taps on the (irreversible) delete action.
+class _DeleteAccountDialog extends StatefulWidget {
+  final String email;
+  const _DeleteAccountDialog({required this.email});
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _controller = TextEditingController();
+  String _typed = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = widget.email.isNotEmpty &&
+        _typed.trim().toLowerCase() == widget.email.trim().toLowerCase();
+    return AlertDialog(
+      backgroundColor: AppColors.bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('Delete account?',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This permanently deletes your account and associated data (email, '
+            'display name, sign-in data). Your on-device recordings are not '
+            'uploaded and stay on your phone. This cannot be undone.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSec, height: 1.5),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Type ${widget.email} to confirm',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrim),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _controller,
+            autocorrect: false,
+            keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(fontSize: 13, color: AppColors.textPrim),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              filled: true,
+              fillColor: AppColors.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.border, width: 0.5),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.border, width: 0.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.danger, width: 1),
+              ),
+            ),
+            onChanged: (v) => setState(() => _typed = v),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel', style: TextStyle(color: AppColors.textDim)),
+        ),
+        TextButton(
+          onPressed: matches ? () => Navigator.pop(context, true) : null,
+          child: Text('Delete',
+              style: TextStyle(
+                  color: matches ? AppColors.danger : AppColors.textDim,
+                  fontWeight: FontWeight.w700)),
+        ),
+      ],
+    );
+  }
+}
 
 class _GoogleSignInButton extends StatefulWidget {
   final Future<void> Function() onTap;
