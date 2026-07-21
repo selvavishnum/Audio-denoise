@@ -54,7 +54,7 @@ Future<void> showSaveGateSheet(
   required bool canWatchAd,
   required VoidCallback onWatchAd,
   required VoidCallback onUpgrade,
-  String title = '30 free saves used',
+  String title = '${AudioProvider.freeExportLimit} free saves used',
 }) {
   return showModalBottomSheet<void>(
     context: context,

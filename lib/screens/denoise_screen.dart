@@ -638,7 +638,7 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   Future<void> _showExportGate(BuildContext context, AudioProvider prov, String path) async {
     await showSaveGateSheet(
       context,
-      title: '30 free exports used',
+      title: '${AudioProvider.freeExportLimit} free exports used',
       canWatchAd: prov.canUseDailyBonus && AdService.isReady,
       onWatchAd: () async {
         Navigator.pop(context);

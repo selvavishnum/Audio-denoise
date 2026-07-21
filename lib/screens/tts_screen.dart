@@ -272,7 +272,7 @@ class _TtsScreenState extends State<TtsScreen> {
       await AnalyticsService.logFreeLimitReached();
       await showSaveGateSheet(
         context,
-        title: '30 free saves used',
+        title: '${AudioProvider.freeExportLimit} free saves used',
         canWatchAd: prov.canUseDailyBonus && AdService.isReady,
         onWatchAd: () async {
           Navigator.pop(context);
