@@ -126,7 +126,6 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   }
 
   Widget _header(BuildContext context) {
-    final prov = context.watch<AudioProvider>();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
