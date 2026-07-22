@@ -16,10 +16,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private val videoProcessor   = VideoAudioProcessor()
-    // Lazy: DeepFilterProcessor's construction loads ONNX Runtime. Defer it
-    // until a DeepFilter method is actually invoked so nothing touches
-    // libonnxruntime.so at app startup (sherpa_onnx ships its own copy).
-    private val deepFilter       by lazy { DeepFilterProcessor(this) }
     private val neuralProcessor  = NeuralNoiseProcessor()
     private val handler          = Handler(Looper.getMainLooper())
 
@@ -55,28 +51,6 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AUDIO_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-
-                    // ── DeepFilterNet3 ONNX init ──────────────────────────
-                    "initDeepFilter" -> {
-                        Thread {
-                            val ok = deepFilter.initialize()
-                            handler.post { result.success(ok) }
-                        }.start()
-                    }
-                    "deepFilter" -> {
-                        val pcmBytes = call.argument<ByteArray>("pcm")      ?: run { result.error("ARG", "pcm missing",  null); return@setMethodCallHandler }
-                        val rate     = call.argument<Int>("rate")            ?: run { result.error("ARG", "rate missing", null); return@setMethodCallHandler }
-                        val isolator = call.argument<Boolean>("isolator")    ?: false
-                        val input    = pcmBytes.toFloatArray()
-                        Thread {
-                            try {
-                                val enhanced = deepFilter.process(input, rate, isolator)
-                                handler.post { result.success(enhanced.toByteArray()) }
-                            } catch (e: Exception) {
-                                handler.post { result.error("DF", e.message, null) }
-                            }
-                        }.start()
-                    }
 
                     // ── Built-in neural processor (no model files needed) ─
                     "initNeuralProcessor" -> {

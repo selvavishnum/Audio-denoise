@@ -100,10 +100,14 @@ class SubscriptionProvider extends ChangeNotifier {
   Future<bool> purchase(Package package) async {
     if (!_initialized) return false;
     try {
+      // purchasePackage returns a PurchaseResult (wraps CustomerInfo +
+      // StoreTransaction) as of purchases_flutter v9 / Play Billing Library 8 —
+      // it used to return CustomerInfo directly.
       final result = await Purchases.purchasePackage(package);
-      _isPro = result.entitlements.active.containsKey(_entitlementId);
+      final info = result.customerInfo;
+      _isPro = info.entitlements.active.containsKey(_entitlementId);
       _activeProduct = _isPro
-          ? (result.entitlements.active[_entitlementId]?.productIdentifier ?? '')
+          ? (info.entitlements.active[_entitlementId]?.productIdentifier ?? '')
           : '';
       if (_isPro) {
         await AnalyticsService.logSubscriptionStarted(package.storeProduct.identifier);
