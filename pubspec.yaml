@@ -43,7 +43,10 @@ dependencies:
   firebase_analytics: ^11.3.3
 
   # Monetization
-  purchases_flutter: ^8.0.0
+  # v9+ required for Google Play Billing Library 8.0.0 compliance (Play Console
+  # requires 8.0.0+ from 31 Aug 2026). See PurchaseResult wrapper change this
+  # forced in subscription_provider.dart's purchase().
+  purchases_flutter: ^10.4.2
 
   # Ads
   google_mobile_ads: ^5.1.0

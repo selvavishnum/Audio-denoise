@@ -46,7 +46,7 @@ android {
     defaultConfig {
         applicationId 'com.noiseclear.app'
         minSdk 24
-        targetSdk 35
+        targetSdk 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true
