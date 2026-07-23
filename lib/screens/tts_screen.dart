@@ -260,9 +260,10 @@ class _TtsScreenState extends State<TtsScreen> {
     );
   }
 
-  // Saving/downloading the generated voice draws from the same shared
-  // 30-free-save pool as Studio and Video (AudioProvider.exportCount) —
-  // Pro subscribers and admin skip the gate entirely.
+  // Saving/downloading the generated voice draws from the same shared,
+  // tiered free pool as Studio and Video (5 free before sign-in, 25 more
+  // after — see AudioProvider) — Pro subscribers and admin skip the gate
+  // entirely.
   Future<void> _saveVoice() async {
     if (_speechPath == null || _saving) return;
     final prov = context.read<AudioProvider>();
@@ -273,13 +274,21 @@ class _TtsScreenState extends State<TtsScreen> {
         await _shareVoice(prov);
       } else {
         await AnalyticsService.logFreeLimitReached();
+        final needsLogin = prov.needsLoginForMoreFree;
         await showSaveGateSheet(
           context,
-          title: '${AudioProvider.freeExportLimit} free saves used',
+          title: needsLogin
+              ? '${AudioProvider.anonFreeLimit} free saves used'
+              : '${AudioProvider.loggedInFreeLimit} free saves used',
           canWatchAd: prov.canUseDailyBonus && AdService.isReady,
+          needsLogin: needsLogin,
           onWatchAd: () async {
             Navigator.pop(context);
             await _showRewardedAd(prov);
+          },
+          onSignIn: () async {
+            Navigator.pop(context);
+            await _handleSignIn();
           },
           onUpgrade: () {
             Navigator.pop(context);
@@ -290,6 +299,19 @@ class _TtsScreenState extends State<TtsScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Signs the user in with Google to unlock the larger logged-in free
+  /// tier — this is NOT a purchase, just account linking so their usage
+  /// allowance can be tracked server-side instead of resetting on reinstall.
+  Future<void> _handleSignIn() async {
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.signInWithGoogle();
+    if (!mounted || !ok) return;
+    final uid = auth.user?.uid;
+    if (uid == null) return;
+    await context.read<SubscriptionProvider>().loginUser(uid);
+    if (mounted) await context.read<AudioProvider>().loginUser(uid);
   }
 
   Future<void> _shareVoice(AudioProvider prov) async {

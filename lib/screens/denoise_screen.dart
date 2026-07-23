@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/audio_params.dart';
 import '../models/processing_stats.dart';
 import '../providers/audio_provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/subscription_provider.dart';
 import '../services/ad_service.dart';
 import '../services/analytics_service.dart';
@@ -643,19 +644,40 @@ class _DenoiseScreenState extends State<DenoiseScreen> {
   }
 
   Future<void> _showExportGate(BuildContext context, AudioProvider prov, String path) async {
+    final needsLogin = prov.needsLoginForMoreFree;
     await showSaveGateSheet(
       context,
-      title: '${AudioProvider.freeExportLimit} free exports used',
+      title: needsLogin
+          ? '${AudioProvider.anonFreeLimit} free exports used'
+          : '${AudioProvider.loggedInFreeLimit} free exports used',
       canWatchAd: prov.canUseDailyBonus && AdService.isReady,
+      needsLogin: needsLogin,
       onWatchAd: () async {
         Navigator.pop(context);
         await _showRewardedAd(context, prov, path);
+      },
+      onSignIn: () async {
+        Navigator.pop(context);
+        await _handleSignIn(context);
       },
       onUpgrade: () {
         Navigator.pop(context);
         _openPaywall(context);
       },
     );
+  }
+
+  /// Signs the user in with Google to unlock the larger logged-in free
+  /// tier — this is NOT a purchase, just account linking so their usage
+  /// allowance can be tracked server-side instead of resetting on reinstall.
+  Future<void> _handleSignIn(BuildContext context) async {
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.signInWithGoogle();
+    if (!context.mounted || !ok) return;
+    final uid = auth.user?.uid;
+    if (uid == null) return;
+    await context.read<SubscriptionProvider>().loginUser(uid);
+    if (context.mounted) await context.read<AudioProvider>().loginUser(uid);
   }
 
   Future<void> _showRewardedAd(BuildContext context, AudioProvider prov, String path) async {

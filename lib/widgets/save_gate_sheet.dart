@@ -6,9 +6,11 @@ import '../providers/subscription_provider.dart';
 import '../theme.dart';
 
 /// Pro / free-saves-left badge. Shared across Studio, Video, and Voice —
-/// all three monetized "save" actions draw from the SAME 30-free-save pool
-/// (AudioProvider.exportCount / freeExportLimit), so this one badge shows
-/// the correct remaining count no matter which screen it's shown on.
+/// all three monetized "save" actions draw from the same tiered pool
+/// (5 free before sign-in, 25 more after — see AudioProvider's
+/// anonFreeLimit/loggedInFreeLimit), so this one badge shows the correct
+/// remaining count for whichever tier is currently active, no matter which
+/// screen it's shown on.
 class FreeLimitBadge extends StatelessWidget {
   const FreeLimitBadge({super.key});
 
@@ -40,22 +42,33 @@ class FreeLimitBadge extends StatelessWidget {
   }
 }
 
-/// Shows the monetization gate bottom sheet: offers a rewarded ad for one
-/// more free save, or upgrading to Pro. Used identically by Studio (audio
-/// export), Video (video export), and Voice (audio download) so all three
-/// "save this result" actions share one gate and one free-save pool.
+/// Shows the monetization gate bottom sheet. Two distinct end-states:
+///
+///  • [needsLogin] true (anonymous user, used up the 5-free anonymous tier):
+///    primary action is "Sign in with Google" to unlock the 25-free
+///    logged-in tier — NOT a purchase prompt yet.
+///  • [needsLogin] false (signed-in user, used up the 25-free logged-in
+///    tier): primary action is "Upgrade Pro", same as before.
+///
+/// Either way, a rewarded-ad "+1 free save today" option is offered first
+/// when available. Used identically by Studio (audio export), Video (video
+/// export), and Voice (audio download).
 ///
 /// Creating (recording, importing, processing, generating, and previewing)
 /// is ALWAYS free and unlimited everywhere — this gate only ever appears
-/// when the user tries to save/download/export a result after the shared
-/// 30 free saves are used up.
+/// when the user tries to save/download/export a result after their
+/// current tier's free allowance is used up.
 Future<void> showSaveGateSheet(
   BuildContext context, {
   required bool canWatchAd,
   required VoidCallback onWatchAd,
   required VoidCallback onUpgrade,
+  bool needsLogin = false,
+  VoidCallback? onSignIn,
   String title = '${AudioProvider.freeExportLimit} free saves used',
 }) {
+  assert(!needsLogin || onSignIn != null,
+      'onSignIn is required when needsLogin is true');
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.bg,
@@ -67,6 +80,8 @@ Future<void> showSaveGateSheet(
       canWatchAd: canWatchAd,
       onWatchAd: onWatchAd,
       onUpgrade: onUpgrade,
+      needsLogin: needsLogin,
+      onSignIn: onSignIn,
     ),
   );
 }
@@ -76,6 +91,8 @@ class SaveGateSheet extends StatelessWidget {
   final bool canWatchAd;
   final VoidCallback onWatchAd;
   final VoidCallback onUpgrade;
+  final bool needsLogin;
+  final VoidCallback? onSignIn;
 
   const SaveGateSheet({
     super.key,
@@ -83,6 +100,8 @@ class SaveGateSheet extends StatelessWidget {
     required this.canWatchAd,
     required this.onWatchAd,
     required this.onUpgrade,
+    this.needsLogin = false,
+    this.onSignIn,
   });
 
   @override
@@ -110,7 +129,11 @@ class SaveGateSheet extends StatelessWidget {
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrim)),
                 const SizedBox(height: 2),
                 Text(
-                  canWatchAd ? 'Watch a short ad for 1 free save today' : 'Upgrade for unlimited access',
+                  canWatchAd
+                      ? 'Watch a short ad for 1 free save today'
+                      : needsLogin
+                          ? 'Sign in with Google for 25 more free saves'
+                          : 'Upgrade for unlimited access',
                   style: const TextStyle(fontSize: 12, color: AppColors.textSec),
                 ),
               ]),
@@ -138,7 +161,7 @@ class SaveGateSheet extends StatelessWidget {
             const SizedBox(height: 10),
           ],
           GestureDetector(
-            onTap: onUpgrade,
+            onTap: needsLogin ? onSignIn : onUpgrade,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -148,10 +171,13 @@ class SaveGateSheet extends StatelessWidget {
                 border: canWatchAd ? Border.all(color: AppColors.border, width: 0.5) : null,
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.workspace_premium_rounded, size: 18,
+                Icon(needsLogin ? Icons.login_rounded : Icons.workspace_premium_rounded, size: 18,
                     color: canWatchAd ? AppColors.textSec : AppColors.white),
                 const SizedBox(width: 8),
-                Text('Upgrade Pro  —  from ₹199/month',
+                Text(
+                    needsLogin
+                        ? 'Sign in with Google  —  25 more free'
+                        : 'Upgrade Pro  —  from ₹199/month',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
                         color: canWatchAd ? AppColors.textSec : AppColors.white)),
               ]),
