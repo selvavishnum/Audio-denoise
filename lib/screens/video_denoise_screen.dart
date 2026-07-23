@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
 import '../providers/audio_provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/subscription_provider.dart';
 import '../services/ad_service.dart';
 import '../services/analytics_service.dart';
@@ -49,8 +50,8 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
   Widget build(BuildContext context) {
     // Uploading, processing, and previewing video noise removal is free and
     // unlimited for everyone. Only Export (saving the result) is gated —
-    // see _export() below, which shares the same 30-free-save pool as
-    // Studio and Voice.
+    // see _export() below, which shares the same tiered free pool as
+    // Studio and Voice (5 free before sign-in, 25 more after).
     return SafeArea(child: _mainContent(context));
   }
 
@@ -371,9 +372,9 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
   }
 
   // Uploading, processing, and previewing are always free. Saving/exporting
-  // the cleaned video draws from the same shared 30-free-save pool as
-  // Studio and Voice (AudioProvider.exportCount) — Pro subscribers skip
-  // the gate entirely.
+  // the cleaned video draws from the same shared, tiered free pool as
+  // Studio and Voice (5 free before sign-in, 25 more after — see
+  // AudioProvider) — Pro subscribers skip the gate entirely.
   Future<void> _export(BuildContext context) async {
     if (_processedPath == null || _exporting) return;
     final prov  = context.read<AudioProvider>();
@@ -385,13 +386,21 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
         await _shareVideo(prov);
       } else {
         await AnalyticsService.logFreeLimitReached();
+        final needsLogin = prov.needsLoginForMoreFree;
         await showSaveGateSheet(
           context,
-          title: '${AudioProvider.freeExportLimit} free saves used',
+          title: needsLogin
+              ? '${AudioProvider.anonFreeLimit} free saves used'
+              : '${AudioProvider.loggedInFreeLimit} free saves used',
           canWatchAd: prov.canUseDailyBonus && AdService.isReady,
+          needsLogin: needsLogin,
           onWatchAd: () async {
             Navigator.pop(context);
             await _showRewardedAd(context, prov);
+          },
+          onSignIn: () async {
+            Navigator.pop(context);
+            await _handleSignIn(context);
           },
           onUpgrade: () {
             Navigator.pop(context);
@@ -402,6 +411,19 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
+  }
+
+  /// Signs the user in with Google to unlock the larger logged-in free
+  /// tier — this is NOT a purchase, just account linking so their usage
+  /// allowance can be tracked server-side instead of resetting on reinstall.
+  Future<void> _handleSignIn(BuildContext context) async {
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.signInWithGoogle();
+    if (!context.mounted || !ok) return;
+    final uid = auth.user?.uid;
+    if (uid == null) return;
+    await context.read<SubscriptionProvider>().loginUser(uid);
+    if (context.mounted) await context.read<AudioProvider>().loginUser(uid);
   }
 
   Future<void> _shareVideo(AudioProvider prov) async {

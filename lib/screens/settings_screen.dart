@@ -156,6 +156,7 @@ class SettingsScreen extends StatelessWidget {
                 final uid = authProv.user?.uid;
                 if (uid != null) {
                   await context.read<SubscriptionProvider>().loginUser(uid);
+                  await context.read<AudioProvider>().loginUser(uid);
                 }
               } else if (authProv.lastError != null) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -191,6 +192,7 @@ class SettingsScreen extends StatelessWidget {
               onTap: () async {
                 await context.read<AuthProvider>().signOut();
                 await context.read<SubscriptionProvider>().logoutUser();
+                context.read<AudioProvider>().logoutUser();
               },
               child: Container(
                 width: double.infinity,
@@ -239,6 +241,7 @@ class SettingsScreen extends StatelessWidget {
     if (!context.mounted) return;
     if (error == null) {
       await sub.logoutUser();
+      if (context.mounted) context.read<AudioProvider>().logoutUser();
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Account deleted')),

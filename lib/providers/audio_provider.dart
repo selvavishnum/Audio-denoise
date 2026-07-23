@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
@@ -55,11 +57,37 @@ class AudioProvider extends ChangeNotifier {
   bool get canUndo => _history.isNotEmpty;
 
   // ── Usage / monetization counter ──────────────────────────────────────
-  int _exportCount = 0;
-  static const int freeExportLimit = 30;
-  int get exportCount => _exportCount;
-  int get freeExportsLeft => max(0, freeExportLimit - _exportCount);
-  bool get hasReachedFreeLimit => _exportCount >= freeExportLimit;
+  // Anonymous users get a small local-only allowance. Signing in unlocks a
+  // much larger allowance tracked server-side in Firestore, keyed by uid —
+  // that's what makes it survive a reinstall or switching to a different
+  // Gmail account (a fresh local install can never see a fresh Firestore
+  // doc for an account that's already used its allowance).
+  static const int anonFreeLimit     = 5;
+  static const int loggedInFreeLimit = 25;
+  static const int freeExportLimit   = anonFreeLimit + loggedInFreeLimit; // 30, display only
+
+  int _anonExportCount     = 0;
+  int _loggedInExportCount = 0;
+  bool _isLoggedIn = false;
+  String? _uid;
+
+  bool get isLoggedInForUsage => _isLoggedIn;
+
+  /// Current tier's usage count (anonymous or logged-in, whichever is active).
+  int get exportCount => _isLoggedIn ? _loggedInExportCount : _anonExportCount;
+
+  int get freeExportsLeft => _isLoggedIn
+      ? max(0, loggedInFreeLimit - _loggedInExportCount)
+      : max(0, anonFreeLimit - _anonExportCount);
+
+  bool get hasReachedFreeLimit => _isLoggedIn
+      ? _loggedInExportCount >= loggedInFreeLimit
+      : _anonExportCount >= anonFreeLimit;
+
+  /// True once the anonymous allowance is used up and the user still isn't
+  /// signed in — the save-gate should offer "sign in for 25 more free"
+  /// here instead of "upgrade to Pro".
+  bool get needsLoginForMoreFree => !_isLoggedIn && _anonExportCount >= anonFreeLimit;
 
   // ── Daily ad bonus ────────────────────────────────────────────────────
   String? _lastBonusDate;
@@ -126,12 +154,24 @@ class AudioProvider extends ChangeNotifier {
     final idx    = prefs.getInt('preset') ?? VoicePreset.natural.index;
     final preset = VoicePreset.values[idx.clamp(0, VoicePreset.values.length - 1)];
     params        = AudioParams.presets[preset]!;
-    _exportCount   = prefs.getInt('exportCount') ?? 0;
+    // Migrate the old flat 30-count key (pre-tiered-limit installs) into the
+    // new anonymous-tier key exactly once — preserves already-used history
+    // instead of handing out a free reset.
+    _anonExportCount = prefs.getInt('anonExportCount') ?? prefs.getInt('exportCount') ?? 0;
     hdModeEnabled  = prefs.getBool('hdMode') ?? false;
     _lastBonusDate = prefs.getString('lastBonusDate');
     isolatorEnabled = prefs.getBool('isolatorEnabled') ?? false;
     _loadHistory(prefs);
-    notifyListeners();
+
+    // Pick up an already-signed-in Firebase session (e.g. app restart while
+    // logged in) so the logged-in 25-free tier applies immediately, not just
+    // after the next explicit sign-in action.
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await loginUser(uid);
+    } else {
+      notifyListeners();
+    }
   }
 
   void _loadHistory(SharedPreferences prefs) {
@@ -410,9 +450,61 @@ class AudioProvider extends ChangeNotifier {
   // ── Export ────────────────────────────────────────────────────────────
 
   Future<void> recordExport() async {
-    _exportCount++;
+    if (_isLoggedIn && _uid != null) {
+      await _recordLoggedInExport(_uid!);
+    } else {
+      _anonExportCount++;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('anonExportCount', _anonExportCount);
+      notifyListeners();
+    }
+  }
+
+  Future<void> _recordLoggedInExport(String uid) async {
+    // Optimistic local bump first so the UI updates instantly; Firestore is
+    // the source of truth and gets reconciled on the next loginUser() call.
+    _loggedInExportCount++;
+    notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('exportCount', _exportCount);
+    await prefs.setInt('loggedInExportCountCache', _loggedInExportCount);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'exportCount': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      // Offline / Firestore unavailable — keep the optimistic local value.
+      // It reconciles against the server next time loginUser() succeeds.
+    }
+  }
+
+  /// Call right after a successful Google Sign-In (and on app start if a
+  /// session is already active) so the 25-free logged-in allowance —
+  /// tracked server-side in Firestore, keyed by uid — takes over from the
+  /// local anonymous counter. This is what stops "used up the free tier,
+  /// sign into a different Gmail, get a fresh allowance": the allowance
+  /// lives on the account, not on the device.
+  Future<void> loginUser(String uid) async {
+    _uid = uid;
+    _isLoggedIn = true;
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      _loggedInExportCount = (doc.data()?['exportCount'] as num?)?.toInt() ?? 0;
+      await prefs.setInt('loggedInExportCountCache', _loggedInExportCount);
+    } catch (_) {
+      // Offline — fall back to the last-synced cached value rather than
+      // resetting to 0, so a momentary network blip can't look like a
+      // fresh allowance.
+      _loggedInExportCount = prefs.getInt('loggedInExportCountCache') ?? 0;
+    }
+    notifyListeners();
+  }
+
+  void logoutUser() {
+    _isLoggedIn = false;
+    _uid = null;
+    _loggedInExportCount = 0;
     notifyListeners();
   }
 
