@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
+import '../providers/audio_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/subscription_provider.dart';
 import '../services/analytics_service.dart';
@@ -226,6 +227,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         return;
       }
       await sub.loginUser(auth.user!.uid);
+      if (mounted) await context.read<AudioProvider>().loginUser(auth.user!.uid);
     }
 
     if (sub.packages.isEmpty) {

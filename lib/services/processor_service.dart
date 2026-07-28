@@ -4,6 +4,7 @@ import '../models/audio_params.dart';
 import 'deepfilter_service.dart';
 import 'neural_denoiser_service.dart';
 import 'neural_processor_service.dart';
+import 'voice_fx_service.dart';
 
 /// Audio processing pipeline — always produces denoised output.
 ///
@@ -38,9 +39,9 @@ class ProcessorService {
       final polished = await NeuralProcessorService.denoise(neural, input.sampleRate);
       lastUsedNeural = true;
       onProgress?.call(1.0);
-      return AudioData.fromSamples(
+      return _finish(
           (polished != null && polished.isNotEmpty) ? polished : neural,
-          input.sampleRate);
+          input.sampleRate, params);
     }
 
     // ── 2. Native Kotlin engines (DeepFilterNet3 ONNX or built-in OMLSA) ──────
@@ -54,7 +55,7 @@ class ProcessorService {
       if (cleaned != null) {
         lastUsedNeural = true;
         onProgress?.call(1.0);
-        return AudioData.fromSamples(cleaned, input.sampleRate);
+        return _finish(cleaned, input.sampleRate, params);
       }
     }
 
@@ -65,7 +66,24 @@ class ProcessorService {
     final fallback = await NeuralProcessorService.denoise(
         input.samples, input.sampleRate);
     onProgress?.call(1.0);
-    return AudioData.fromSamples(fallback ?? input.samples, input.sampleRate);
+    return _finish(fallback ?? input.samples, input.sampleRate, params);
+  }
+
+  /// Single exit point for [process] — applies the user's Pitch setting to the
+  /// denoised result regardless of which engine produced it.
+  ///
+  /// `params.pitchSemitones` was previously dead: the slider existed in Studio
+  /// and Home but no service ever read the value, so dragging it did nothing.
+  /// Duration is preserved (speed 1.0) so a pitch change never alters clip
+  /// length.
+  static Future<AudioData> _finish(
+      Float32List samples, int sampleRate, AudioParams params) async {
+    final st = params.pitchSemitones;
+    if (st.abs() < 0.01 || samples.isEmpty) {
+      return AudioData.fromSamples(samples, sampleRate);
+    }
+    final shifted = await VoiceFxService.applyPitch(samples, st);
+    return AudioData.fromSamples(shifted, sampleRate);
   }
 
   // ─── WAV decode/encode ────────────────────────────────────────────────────

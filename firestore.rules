@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// Backs the logged-in 25-free-save usage counter (AudioProvider.loginUser /
+// recordExport in lib/providers/audio_provider.dart). Anonymous usage (the
+// 5-free tier) never touches Firestore — it's local-only on the device.
+//
+// These rules are intentionally strict about *shape*, not just ownership:
+// a signed-in client can only ever move its own exportCount up by exactly 1
+// per write, and never past the 25-save cap. That stops a modified client
+// from writing an arbitrary (e.g. negative or zero) exportCount directly —
+// it can still call this API as fast as it wants, but each call only ever
+// legitimately represents one real save action.
+//
+// This is a client-facing security rule, not a substitute for a Cloud
+// Function — a sufficiently determined attacker with a valid ID token can
+// still script repeated legitimate-shaped increments. It raises the bar
+// significantly over pure local storage without requiring a paid Firebase
+// plan (Cloud Functions needs Blaze billing; these rules work on Spark).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+                    && request.resource.data.exportCount is int
+                    && request.resource.data.exportCount == 1;
+
+      allow update: if isOwner(uid)
+                    && request.resource.data.exportCount is int
+                    && request.resource.data.exportCount == resource.data.exportCount + 1
+                    && request.resource.data.exportCount <= 25;
+
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
