@@ -742,8 +742,10 @@ class _AdvancedParams extends StatelessWidget {
           _section('Voice'),
           ParamSlider(label: 'Pitch', value: p.pitchSemitones, min: -8, max: 8, divisions: 160, displayDecimals: 1, unit: 'st',
               color: AppColors.pink, onChanged: (v) => prov.updateParams(p.copyWith(pitchSemitones: v))),
-          ParamSlider(label: 'Formant', value: p.formantFactor, min: 0.7, max: 1.4, divisions: 70, displayDecimals: 2, unit: '×',
-              color: AppColors.pink, onChanged: (v) => prov.updateParams(p.copyWith(formantFactor: v))),
+          // Formant slider intentionally not shown: independent formant
+          // shifting needs a phase vocoder / PSOLA, which this pipeline does
+          // not have, so the control was a no-op. The field is kept on
+          // AudioParams for serialization compatibility.
           ParamSlider(label: 'Exciter', value: p.exciterAmount, min: 0, max: 100, unit: '%',
               color: AppColors.amber, onChanged: (v) => prov.updateParams(p.copyWith(exciterAmount: v))),
           _section('EQ'),

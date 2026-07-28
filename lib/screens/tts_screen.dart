@@ -13,6 +13,8 @@ import '../providers/subscription_provider.dart';
 import '../services/ad_service.dart';
 import '../services/analytics_service.dart';
 import '../services/neural_tts_service.dart';
+import '../services/processor_service.dart';
+import '../services/voice_fx_service.dart';
 import '../theme.dart';
 import '../widgets/save_gate_sheet.dart';
 import 'paywall_screen.dart';
@@ -45,7 +47,17 @@ class _TtsScreenState extends State<TtsScreen> {
   bool _playing                = false;
   bool _hasSpeech              = false;
   bool _saving                 = false; // guards against double-tap double-charging the save counter
+  /// Path actually played/saved/shared — the effected render when an effect is
+  /// active, otherwise identical to [_rawSpeechPath].
   String? _speechPath;
+  /// Untouched engine output, kept so switching effects only re-runs the DSP
+  /// instead of re-synthesising the whole utterance.
+  String? _rawSpeechPath;
+  VoiceEffect _effect          = VoiceEffect.none;
+  bool _applyingFx             = false;
+  /// Previous effected render, deleted when superseded so repeatedly toggling
+  /// effects doesn't accumulate temp files.
+  String? _lastFxPath;
   String? _error;
 
   // Neural model download state
@@ -70,9 +82,20 @@ class _TtsScreenState extends State<TtsScreen> {
     _initTts();
   }
 
+  /// Speech rate passed to the device engine.
+  ///
+  /// flutter_tts's Dart doc says 0.0-1.0, but that describes iOS: on Android
+  /// the value is forwarded to `TextToSpeech.setSpeechRate`, where 1.0 is
+  /// normal and values above 1.0 are valid (dlutton/flutter_tts#236; the PR
+  /// to normalise the two platforms was closed unmerged). This app ships
+  /// Android only, so the slider's 0.5x-2.0x range maps 1:1 and is passed
+  /// through unchanged — rescaling it to the documented iOS range would halve
+  /// everyone's playback speed.
+  double get _engineRate => _speed;
+
   Future<void> _initTts() async {
     await _tts.setLanguage('en-US');
-    await _tts.setSpeechRate(_speed);
+    await _tts.setSpeechRate(_engineRate);
     await _tts.setPitch(_pitch);
     await _tts.awaitSpeakCompletion(true);
 
@@ -186,8 +209,10 @@ class _TtsScreenState extends State<TtsScreen> {
       final path = await _neural.synthesize(_neuralVoice, text, speed: _speed);
       if (!mounted) return;
       if (path != null) {
+        _rawSpeechPath = path;
         _speechPath = path;
         setState(() { _generating = false; _hasSpeech = true; });
+        await _applyEffect();
       } else {
         setState(() {
           _generating = false;
@@ -209,7 +234,7 @@ class _TtsScreenState extends State<TtsScreen> {
       // Pitch nudge for gender when voice names don't distinguish
       final pitchBias = _gender == _VoiceGender.female ? 0.1 : -0.1;
       await _tts.setPitch((_pitch + pitchBias).clamp(0.5, 2.0));
-      await _tts.setSpeechRate(_speed);
+      await _tts.setSpeechRate(_engineRate);
 
       // Synthesise to file
       final dir  = await getApplicationDocumentsDirectory();
@@ -220,8 +245,10 @@ class _TtsScreenState extends State<TtsScreen> {
       if (!mounted) return;
 
       if (generated) {
+        _rawSpeechPath = path;
         _speechPath = path;
         setState(() { _generating = false; _hasSpeech = true; });
+        await _applyEffect();
       } else {
         // Fallback: play through speaker (no file)
         setState(() { _generating = false; _hasSpeech = false;
@@ -231,6 +258,81 @@ class _TtsScreenState extends State<TtsScreen> {
     } catch (e) {
       if (mounted) setState(() { _generating = false; _error = 'TTS error: $e'; });
     }
+  }
+
+  /// Re-render [_speechPath] from the untouched [_rawSpeechPath] using the
+  /// currently selected effect.
+  ///
+  /// Deliberately post-processes the finished PCM rather than driving engine
+  /// settings, so the neural and device paths behave identically (the neural
+  /// engine exposes no pitch control at all) and so preview, save and share
+  /// are guaranteed to be the same audio.
+  Future<void> _applyEffect() async {
+    final raw = _rawSpeechPath;
+    if (raw == null) return;
+
+    await _player.stop();
+    if (mounted) setState(() => _playing = false);
+
+    if (_effect == VoiceEffect.none) {
+      _speechPath = raw;
+      _discardPreviousFx();
+      if (mounted) setState(() {});
+      return;
+    }
+
+    if (mounted) setState(() => _applyingFx = true);
+    try {
+      final data = ProcessorService.decodeWav(await File(raw).readAsBytes());
+      if (data == null) {
+        _speechPath = raw;
+        _discardPreviousFx();
+        if (mounted) setState(() {});
+        return;
+      }
+      // The effect changes the sample COUNT, not the sample RATE — the output
+      // is meant to be played back at the original rate.
+      final out = await VoiceFxService.apply(data.samples, _effect);
+      final dir = await getTemporaryDirectory();
+      // Timestamped rather than a fixed name per effect so the player never
+      // serves a cached copy of a previous render.
+      final p = '${dir.path}/fx_${_effect.name}_'
+          '${DateTime.now().millisecondsSinceEpoch}.wav';
+      await File(p).writeAsBytes(
+          ProcessorService.encodeWav(out, data.sampleRate));
+      // Point at the new render BEFORE discarding, so the guard in
+      // _discardPreviousFx never mistakes the outgoing file for the live one.
+      _speechPath = p;
+      _discardPreviousFx();
+      _lastFxPath = p;
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Any failure falls back to the unprocessed render rather than
+      // leaving the user with nothing to play.
+      _speechPath = raw;
+      _discardPreviousFx();
+      if (mounted) setState(() {});
+    } finally {
+      if (mounted) setState(() => _applyingFx = false);
+    }
+  }
+
+  void _discardPreviousFx() {
+    final old = _lastFxPath;
+    _lastFxPath = null;
+    if (old == null || old == _speechPath) return;
+    try {
+      final f = File(old);
+      if (f.existsSync()) f.deleteSync();
+    } catch (_) {
+      // Best-effort cleanup — a leftover temp file is not worth surfacing.
+    }
+  }
+
+  Future<void> _selectEffect(VoiceEffect e) async {
+    if (_effect == e || _applyingFx) return;
+    setState(() => _effect = e);
+    await _applyEffect();
   }
 
   Future<void> _togglePlay() async {
@@ -379,6 +481,8 @@ class _TtsScreenState extends State<TtsScreen> {
               const SizedBox(height: 12),
               if (_error != null) _errorBadge(),
               if (_hasSpeech) ...[
+                const SizedBox(height: 16),
+                _effectRow(),
                 const SizedBox(height: 16),
                 _playbackRow(),
                 const SizedBox(height: 16),
@@ -541,6 +645,69 @@ class _TtsScreenState extends State<TtsScreen> {
       ),
     ),
   );
+
+  /// Character-effect picker. Shown only once audio exists, because switching
+  /// effects re-renders from the cached raw render rather than re-synthesising.
+  Widget _effectRow() {
+    const order = [
+      VoiceEffect.none,
+      VoiceEffect.cartoonKid,
+      VoiceEffect.chipmunk,
+      VoiceEffect.tinySqueak,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Text('Voice Effect',
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600,
+                  color: AppColors.textSec)),
+          const SizedBox(width: 8),
+          if (_applyingFx)
+            const SizedBox(
+              width: 11, height: 11,
+              child: CircularProgressIndicator(
+                  strokeWidth: 1.6, color: AppColors.textDim),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: order.map((e) {
+            final p = kVoiceFxPresets[e]!;
+            final sel = _effect == e;
+            return GestureDetector(
+              onTap: _applyingFx ? null : () => _selectEffect(e),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.textPrim : AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: sel ? AppColors.textPrim : AppColors.border,
+                      width: 0.5),
+                ),
+                child: Text(p.label,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                        color: sel ? AppColors.white : AppColors.textSec)),
+              ),
+            );
+          }).toList(),
+        ),
+        if (_effect != VoiceEffect.none) ...[
+          const SizedBox(height: 6),
+          Text(kVoiceFxPresets[_effect]!.blurb,
+              style: const TextStyle(fontSize: 11, color: AppColors.textDim)),
+        ],
+      ],
+    );
+  }
 
   Widget _sliders() => Column(
     children: [

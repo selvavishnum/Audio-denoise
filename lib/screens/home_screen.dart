@@ -531,10 +531,7 @@ class _HomeScreenState extends State<HomeScreen>
         divisions: 160, unit: ' st', displayDecimals: 1,
         color: AppColors.pink,
         onChanged: (v) => u(p.copyWith(pitchSemitones: v))),
-      ParamSlider(
-        label: 'Formant', value: p.formantFactor, min: 0.7, max: 1.4,
-        divisions: 70, displayDecimals: 2, color: AppColors.pink,
-        onChanged: (v) => u(p.copyWith(formantFactor: v))),
+      // Formant slider intentionally not shown — see denoise_screen.dart.
       ParamSlider(
         label: 'Harmonic Exciter', value: p.exciterAmount, min: 0, max: 100,
         unit: '%', color: AppColors.amber,
