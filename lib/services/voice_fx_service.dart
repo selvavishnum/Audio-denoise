@@ -26,7 +26,7 @@ Float32List _runFx(_FxArgs a) =>
 /// pitch control at all. Post-processing is the only place both can share one
 /// implementation — and it also guarantees that what the user previews is
 /// byte-identical to what gets saved or shared.
-enum VoiceEffect { none, cartoonKid, chipmunk, tinySqueak }
+enum VoiceEffect { none, cartoonKid, chipmunk, pandi }
 
 class VoiceFxPreset {
   final String label;
@@ -81,9 +81,9 @@ const Map<VoiceEffect, VoiceFxPreset> kVoiceFxPresets = {
     semitones: 7,
     speed: 1.4983070768766815,
   ),
-  VoiceEffect.tinySqueak: VoiceFxPreset(
-    label: 'Tiny Squeak',
-    blurb: 'Extreme pixie voice',
+  VoiceEffect.pandi: VoiceFxPreset(
+    label: 'Pandi',
+    blurb: 'Extreme high pitch, very squeaky',
     semitones: 10,
     speed: 1.15,
   ),

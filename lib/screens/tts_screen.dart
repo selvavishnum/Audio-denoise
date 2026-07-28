@@ -653,7 +653,7 @@ class _TtsScreenState extends State<TtsScreen> {
       VoiceEffect.none,
       VoiceEffect.cartoonKid,
       VoiceEffect.chipmunk,
-      VoiceEffect.tinySqueak,
+      VoiceEffect.pandi,
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
