@@ -105,6 +105,16 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
 
   // ── Engine selector ───────────────────────────────────────────────────────
 
+  /// ElevenLabs cloud isolation is implemented end-to-end but not switched on
+  /// for release: it needs a user-supplied API key and a billing story first.
+  /// Flip this to `true` to re-enable the tab — the processing path, key
+  /// dialog and error handling below are all still wired up and intact.
+  ///
+  /// Deliberately `final`, not `const`: a `const false` lets the analyzer
+  /// constant-fold every guard below into `dead_code` warnings, and CI runs
+  /// `flutter analyze --no-fatal-infos`, which still fails on warnings.
+  static final bool _elevenLabsEnabled = false;
+
   Widget _engineSelector(BuildContext context) => Container(
     padding: const EdgeInsets.all(4),
     decoration: BoxDecoration(
@@ -122,11 +132,22 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
       _EngineTab(
         label: 'ElevenLabs Cloud AI',
         icon: Icons.cloud_rounded,
-        selected: _engine == _Engine.elevenLabs,
-        onTap: () => setState(() { _engine = _Engine.elevenLabs; _error = null; }),
+        selected: _elevenLabsEnabled && _engine == _Engine.elevenLabs,
+        comingSoon: !_elevenLabsEnabled,
+        onTap: _elevenLabsEnabled
+            ? () => setState(() { _engine = _Engine.elevenLabs; _error = null; })
+            : () => _notifyComingSoon(context),
       ),
     ]),
   );
+
+  void _notifyComingSoon(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('ElevenLabs cloud isolation is coming soon — '
+          'on-device AI is available now.'),
+      duration: Duration(seconds: 3),
+    ));
+  }
 
   // ── Video area ────────────────────────────────────────────────────────────
 
@@ -277,7 +298,10 @@ class _VideoDenoiseScreenState extends State<VideoDenoiseScreen> {
   Future<void> _process(BuildContext context) async {
     if (_videoPath == null) return;
 
-    if (_engine == _Engine.elevenLabs) {
+    // The `_elevenLabsEnabled` guard means a disabled cloud engine can never
+    // be reached even if _engine were somehow left set from a previous build's
+    // persisted state.
+    if (_elevenLabsEnabled && _engine == _Engine.elevenLabs) {
       await _processWithElevenLabs(context);
     } else {
       await _processOnDevice(context);
@@ -521,39 +545,62 @@ class _EngineTab extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// Renders the tab dimmed with a SOON badge and, by convention, is paired
+  /// with an [onTap] that explains rather than selects.
+  final bool comingSoon;
+
   const _EngineTab({
     required this.label, required this.icon,
     required this.selected, required this.onTap,
+    this.comingSoon = false,
   });
 
   @override
-  Widget build(BuildContext context) => Expanded(
-    child: GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.textPrim : Colors.transparent,
-          borderRadius: BorderRadius.circular(11),
-        ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, size: 14,
-              color: selected ? AppColors.white : AppColors.textSec),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(label,
-              style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600,
-                color: selected ? AppColors.white : AppColors.textSec,
-              ),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-            ),
+  Widget build(BuildContext context) {
+    final fg = selected
+        ? AppColors.white
+        : (comingSoon ? AppColors.textDim : AppColors.textSec);
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.textPrim : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
           ),
-        ]),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 14, color: fg),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(label,
+                style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w600, color: fg,
+                ),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (comingSoon) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: const Text('SOON',
+                    style: TextStyle(
+                        fontSize: 8, fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3, color: AppColors.textDim)),
+              ),
+            ],
+          ]),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 // ── Video player tile ─────────────────────────────────────────────────────────
