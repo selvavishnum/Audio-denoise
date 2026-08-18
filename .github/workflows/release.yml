@@ -13,6 +13,11 @@ on:
         description: 'Version code  (integer, must be higher than last Play Store upload)'
         required: true
         default: '1'
+      unlock_all_features:
+        description: 'Unlock every paid feature with no purchase (Closed Testing builds only — NEVER for Production)'
+        type: boolean
+        required: true
+        default: false
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
@@ -59,13 +64,28 @@ jobs:
           if [[ "${{ github.event_name }}" == "push" ]]; then
             NAME="${GITHUB_REF#refs/tags/v}"
             CODE=$(git rev-list --count HEAD)
+            # Tag pushes are the "real release" path — never unlock features
+            # here even if a future workflow_dispatch build left the input
+            # checked; only workflow_dispatch's own explicit input can do it.
+            UNLOCK="false"
           else
             NAME="${{ github.event.inputs.version_name }}"
             CODE="${{ github.event.inputs.version_code }}"
+            UNLOCK="${{ github.event.inputs.unlock_all_features }}"
           fi
-          echo "name=$NAME"  >> "$GITHUB_OUTPUT"
-          echo "code=$CODE"  >> "$GITHUB_OUTPUT"
-          echo "tag=v$NAME"  >> "$GITHUB_OUTPUT"
+          # Filenames get a visible -TEST suffix when unlocked, so the file
+          # itself makes it hard to mistake for a Production upload.
+          SUFFIX=""
+          [[ "$UNLOCK" == "true" ]] && SUFFIX="-TEST"
+
+          echo "name=$NAME"       >> "$GITHUB_OUTPUT"
+          echo "code=$CODE"       >> "$GITHUB_OUTPUT"
+          echo "tag=v$NAME"       >> "$GITHUB_OUTPUT"
+          echo "unlock=$UNLOCK"   >> "$GITHUB_OUTPUT"
+          echo "suffix=$SUFFIX"   >> "$GITHUB_OUTPUT"
+          if [[ "$UNLOCK" == "true" ]]; then
+            echo "::warning::UNLOCK_ALL_FEATURES=true — this build has every paywall bypassed. Upload it ONLY to Closed Testing, never to Production."
+          fi
 
       # ── Production signing (optional) ─────────────────────────────────
       # Store these four secrets in  Settings → Secrets → Actions:
@@ -103,19 +123,20 @@ jobs:
           flutter build apk --release \
             --build-name="${{ steps.ver.outputs.name }}" \
             --build-number="${{ steps.ver.outputs.code }}" \
-            --dart-define="ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL || 'selvavishnu.m@gmail.com' }}"
+            --dart-define="ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL || 'selvavishnu.m@gmail.com' }}" \
+            --dart-define="UNLOCK_ALL_FEATURES=${{ steps.ver.outputs.unlock }}"
 
       # ── Rename APK ────────────────────────────────────────────────────
       - name: Rename APK
         run: |
           mv build/app/outputs/flutter-apk/app-release.apk \
-             build/app/outputs/flutter-apk/NoiseClear-${{ steps.ver.outputs.name }}.apk
+             "build/app/outputs/flutter-apk/NoiseClear-${{ steps.ver.outputs.name }}${{ steps.ver.outputs.suffix }}.apk"
 
       # ── Upload artifact (always available in Actions tab) ─────────────
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NoiseClear-${{ steps.ver.outputs.name }}-apk
+          name: NoiseClear-${{ steps.ver.outputs.name }}${{ steps.ver.outputs.suffix }}-apk
           path: build/app/outputs/flutter-apk/NoiseClear-*.apk
           retention-days: 90
 
@@ -129,19 +150,20 @@ jobs:
           flutter build appbundle --release \
             --build-name="${{ steps.ver.outputs.name }}" \
             --build-number="${{ steps.ver.outputs.code }}" \
-            --dart-define="ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL || 'selvavishnu.m@gmail.com' }}"
+            --dart-define="ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL || 'selvavishnu.m@gmail.com' }}" \
+            --dart-define="UNLOCK_ALL_FEATURES=${{ steps.ver.outputs.unlock }}"
 
       # ── Rename AAB ────────────────────────────────────────────────────
       - name: Rename AAB
         run: |
           mv build/app/outputs/bundle/release/app-release.aab \
-             build/app/outputs/bundle/release/NoiseClear-${{ steps.ver.outputs.name }}.aab
+             "build/app/outputs/bundle/release/NoiseClear-${{ steps.ver.outputs.name }}${{ steps.ver.outputs.suffix }}.aab"
 
       # ── Upload AAB artifact (download this, upload to Play Console) ────
       - name: Upload release AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NoiseClear-${{ steps.ver.outputs.name }}-aab
+          name: NoiseClear-${{ steps.ver.outputs.name }}${{ steps.ver.outputs.suffix }}-aab
           path: build/app/outputs/bundle/release/NoiseClear-*.aab
           retention-days: 90
 
@@ -154,12 +176,12 @@ jobs:
       - name: Rename R8 mapping file
         run: |
           cp build/app/outputs/mapping/release/mapping.txt \
-             build/app/outputs/mapping/release/NoiseClear-${{ steps.ver.outputs.name }}-mapping.txt
+             "build/app/outputs/mapping/release/NoiseClear-${{ steps.ver.outputs.name }}${{ steps.ver.outputs.suffix }}-mapping.txt"
 
       - name: Upload mapping file artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NoiseClear-${{ steps.ver.outputs.name }}-mapping
+          name: NoiseClear-${{ steps.ver.outputs.name }}${{ steps.ver.outputs.suffix }}-mapping
           path: build/app/outputs/mapping/release/NoiseClear-*-mapping.txt
           retention-days: 90
 
@@ -172,24 +194,26 @@ jobs:
         with:
           tag_name:         ${{ steps.ver.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name:             "NoiseClear ${{ steps.ver.outputs.tag }}"
+          name:             "NoiseClear ${{ steps.ver.outputs.tag }}${{ steps.ver.outputs.suffix }}"
           body: |
-            ## NoiseClear ${{ steps.ver.outputs.tag }}
+            ## NoiseClear ${{ steps.ver.outputs.tag }}${{ steps.ver.outputs.suffix }}
+
+            ${{ steps.ver.outputs.unlock == 'true' && '> **⚠️ TEST BUILD — every paywall is bypassed, no purchase required.** Upload this .aab ONLY to Play Console → Closed Testing. Never upload it to Production.' || '' }}
 
             ### Play Store (recommended)
-            Upload **NoiseClear-${{ steps.ver.outputs.name }}.aab** to
-            Play Console → your app → Production (or Internal testing) →
+            Upload **NoiseClear-${{ steps.ver.outputs.name }}${{ steps.ver.outputs.suffix }}.aab** to
+            Play Console → your app → ${{ steps.ver.outputs.unlock == 'true' && 'Closed testing' || 'Production (or Internal testing)' }} →
             Create new release → upload the `.aab`. Google Play re-signs it
             with App Signing. Version code: **${{ steps.ver.outputs.code }}**
             (must be higher than the previous upload).
 
             After uploading, clear the "no deobfuscation file" warning:
             App bundle explorer → select this version → Downloads tab →
-            Upload deobfuscation file → pick **NoiseClear-${{ steps.ver.outputs.name }}-mapping.txt**
+            Upload deobfuscation file → pick **NoiseClear-${{ steps.ver.outputs.name }}${{ steps.ver.outputs.suffix }}-mapping.txt**
             below. Optional, but makes crash/ANR reports readable.
 
             ### Sideload / direct install (testing)
-            1. Download **NoiseClear-${{ steps.ver.outputs.name }}.apk** below.
+            1. Download **NoiseClear-${{ steps.ver.outputs.name }}${{ steps.ver.outputs.suffix }}.apk** below.
             2. On your Android device: **Settings → Apps → Install unknown apps** → allow your browser/file manager.
             3. Open the downloaded APK and tap **Install**.
 
