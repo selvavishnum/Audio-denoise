@@ -16,13 +16,28 @@ class SubscriptionProvider extends ChangeNotifier {
   // reviewers can access all paid features (they cannot make purchases).
   static const _reviewEmail = 'noiseclear.review@gmail.com';
 
+  /// Unlocks every paid feature for every user, no purchase or login
+  /// required. Exists ONLY for the Closed Testing track Google Play
+  /// requires new apps to run for 14 days before granting Production
+  /// access — testers need to exercise the full feature set, not just what
+  /// a free tier exposes. Compiled in via
+  /// `--dart-define=UNLOCK_ALL_FEATURES=true`; the default (and every
+  /// production build) is false, so normal gating applies unless a build
+  /// explicitly opts in. Never set this for a Production-track build.
+  static const bool _unlockAllFeatures = bool.fromEnvironment(
+    'UNLOCK_ALL_FEATURES',
+    defaultValue: false,
+  );
+
   bool _isPro = false;
   String _activeProduct = '';
   List<Package> _packages = [];
   bool _initialized = false;
 
-  // Admin / review emails bypass all paywalls — no purchase required.
+  // Closed-testing override, then admin/review emails, then a real
+  // purchase — first match wins, no purchase required for the first two.
   bool get isPro {
+    if (_unlockAllFeatures) return true;
     if (_isPro) return true;
     final e = (FirebaseAuth.instance.currentUser?.email ?? '').toLowerCase().trim();
     return e == _adminEmail.toLowerCase() || e == _reviewEmail;
@@ -31,7 +46,12 @@ class SubscriptionProvider extends ChangeNotifier {
   List<Package> get packages => _packages;
 
   String get planLabel {
-    if (!_isPro) return 'Free';
+    // Checks the isPro GETTER (closed-testing override + admin/review +
+    // real purchase), not the private _isPro field — otherwise a
+    // closed-testing tester or admin/review account sees "Free" here even
+    // though every gate elsewhere already treats them as Pro.
+    if (!isPro) return 'Free';
+    if (_unlockAllFeatures && !_isPro) return 'Pro (Test Build)';
     if (_activeProduct.contains('yearly') || _activeProduct.contains('annual')) return 'Pro Yearly';
     if (_activeProduct.contains('lifetime')) return 'Pro Lifetime';
     return 'Pro Monthly';
