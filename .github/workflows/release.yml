@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version name  (e.g. 1.2.0)'
+        description: 'Version name  (e.g. 1.2.0) — just a label, does not need to be unique'
         required: true
-        default: '1.0.0'
+        default: '1.1.1'
       version_code:
-        description: 'Version code  (integer, must be higher than last Play Store upload)'
+        description: 'Version code — integer, MUST be higher than pubspec.yaml''s current build number AND every version Play Console has ever accepted. This is the field Play actually enforces; version_name above is cosmetic.'
         required: true
-        default: '1'
+        default: '201'
       unlock_all_features:
         description: 'Unlock every paid feature with no purchase (Closed Testing builds only — NEVER for Production)'
         type: boolean
@@ -72,6 +72,26 @@ jobs:
             NAME="${{ github.event.inputs.version_name }}"
             CODE="${{ github.event.inputs.version_code }}"
             UNLOCK="${{ github.event.inputs.unlock_all_features }}"
+
+            # Guard against the exact mistake that has bitten this project
+            # twice already: typing a new version_name (e.g. "1.0.7") while
+            # leaving version_code at its default of "1", or otherwise below
+            # any versionCode Play Console has ever accepted. Play rejects
+            # the upload for this — better to fail the build now, loudly,
+            # than to discover it after uploading a doomed AAB.
+            if ! [[ "$CODE" =~ ^[0-9]+$ ]]; then
+              echo "::error::version_code ('$CODE') must be a plain positive integer."
+              exit 1
+            fi
+            PUBSPEC_CODE=$(grep -E '^version:' pubspec.yaml | sed -E 's/.*\+([0-9]+)[[:space:]]*$/\1/')
+            if [[ -z "$PUBSPEC_CODE" ]] || ! [[ "$PUBSPEC_CODE" =~ ^[0-9]+$ ]]; then
+              echo "::error::Could not read a build number (the +N suffix) out of pubspec.yaml's version: line — refusing to guess a safe version_code floor."
+              exit 1
+            fi
+            if (( CODE <= PUBSPEC_CODE )); then
+              echo "::error::version_code ($CODE) must be HIGHER than pubspec.yaml's current build number ($PUBSPEC_CODE), which itself must be at or above whatever Play Console last accepted. Use something clearly above $PUBSPEC_CODE — check Play Console's release history if you're unsure how far ahead to jump."
+              exit 1
+            fi
           fi
           # Filenames get a visible -TEST suffix when unlocked, so the file
           # itself makes it hard to mistake for a Production upload.
